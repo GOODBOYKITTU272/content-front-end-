@@ -23,15 +23,27 @@ import CmoDashboard from './components/cmo/CmoDashboard';
 // Writer Imports
 import WriterDashboard from './components/writer/WriterDashboard';
 
+// Cinematographer Imports
+import CineDashboard from './components/cine/CineDashboard';
+
+// Editor Imports
+import EditorDashboard from './components/editor/EditorDashboard';
+
+// Designer Imports
+import DesignerDashboard from './components/designer/DesignerDashboard';
+
+// Ops Imports
+import OpsDashboard from './components/ops/OpsDashboard';
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-  
+
   // Admin State
   const [adminView, setAdminView] = useState<AdminView>('DASH');
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
-  const [adminLogs, setAdminLogs] = useState<any[]>([]); 
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
   // Initialize checks
   useEffect(() => {
@@ -46,10 +58,10 @@ function App() {
     if (!u) return;
 
     if (u.role === Role.ADMIN) {
-        setAdminUsers([...db.getUsers()]);
-        setAdminLogs([...db.getSystemLogs()]);
+      setAdminUsers([...db.getUsers()]);
+      setAdminLogs([...db.getSystemLogs()]);
     } else {
-        setProjects([...db.getProjects(u)]);
+      setProjects([...db.getProjects(u)]);
     }
   };
 
@@ -59,7 +71,7 @@ function App() {
       setUser(currentUser);
       refreshData(currentUser);
       if (currentUser.role === Role.ADMIN) {
-          setAdminView('DASH');
+        setAdminView('DASH');
       }
     }
   };
@@ -81,38 +93,38 @@ function App() {
 
   // --- ADMIN FLOW ---
   if (user.role === Role.ADMIN) {
-      return (
-        <AdminLayout 
-            user={user} 
-            currentView={adminView} 
-            onNavigate={setAdminView} 
-            onLogout={handleLogout}
-        >
-            {adminView === 'DASH' && <AdminDashboard users={adminUsers} logs={adminLogs} onNavigate={setAdminView} />}
-            {adminView === 'USERS' && <UserManagement users={adminUsers} logs={adminLogs} onRefresh={() => refreshData(user)} onNavigate={setAdminView} />}
-            {adminView === 'USER_ADD' && <AddUser onBack={() => setAdminView('USERS')} onUserAdded={() => { refreshData(user); setAdminView('USERS'); }} />}
-            {adminView === 'ROLES' && <RolesMatrix />}
-            {adminView === 'LOGS' && <AuditLogs logs={adminLogs} />}
-            {adminView === 'SETTINGS' && (
-                <div className="flex flex-col items-center justify-center h-96 text-slate-400">
-                    <div className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-full flex items-center justify-center mb-4">
-                         <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse"></div>
-                    </div>
-                    <h3 className="text-lg font-medium text-slate-600">Settings Module</h3>
-                    <p>Coming in v1.2</p>
-                </div>
-            )}
-        </AdminLayout>
-      );
+    return (
+      <AdminLayout
+        user={user}
+        currentView={adminView}
+        onNavigate={setAdminView}
+        onLogout={handleLogout}
+      >
+        {adminView === 'DASH' && <AdminDashboard users={adminUsers} logs={adminLogs} onNavigate={setAdminView} />}
+        {adminView === 'USERS' && <UserManagement users={adminUsers} logs={adminLogs} onRefresh={() => refreshData(user)} onNavigate={setAdminView} />}
+        {adminView === 'USER_ADD' && <AddUser onBack={() => setAdminView('USERS')} onUserAdded={() => { refreshData(user); setAdminView('USERS'); }} />}
+        {adminView === 'ROLES' && <RolesMatrix />}
+        {adminView === 'LOGS' && <AuditLogs logs={adminLogs} />}
+        {adminView === 'SETTINGS' && (
+          <div className="flex flex-col items-center justify-center h-96 text-slate-400">
+            <div className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-full flex items-center justify-center mb-4">
+              <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse"></div>
+            </div>
+            <h3 className="text-lg font-medium text-slate-600">Settings Module</h3>
+            <p>Coming in v1.2</p>
+          </div>
+        )}
+      </AdminLayout>
+    );
   }
 
   // --- CEO FLOW ---
   if (user.role === Role.CEO) {
     return (
-      <CeoDashboard 
-        user={user} 
-        projects={projects} 
-        onRefresh={() => refreshData(user)} 
+      <CeoDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
         onLogout={handleLogout}
       />
     );
@@ -121,10 +133,10 @@ function App() {
   // --- CMO FLOW ---
   if (user.role === Role.CMO) {
     return (
-      <CmoDashboard 
-        user={user} 
-        projects={projects} 
-        onRefresh={() => refreshData(user)} 
+      <CmoDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
         onLogout={handleLogout}
       />
     );
@@ -132,36 +144,84 @@ function App() {
 
   // --- WRITER FLOW ---
   if (user.role === Role.WRITER) {
-      return (
-        <WriterDashboard 
-            user={user}
-            projects={projects}
-            onRefresh={() => refreshData(user)}
-            onLogout={handleLogout}
-        />
-      );
+    return (
+      <WriterDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
+        onLogout={handleLogout}
+      />
+    );
   }
 
-  // --- STANDARD WORKFLOW FLOW (Ops, Cine, etc.) ---
+  // --- CINEMATOGRAPHER FLOW ---
+  if (user.role === Role.CINE) {
+    return (
+      <CineDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // --- EDITOR FLOW ---
+  if (user.role === Role.EDITOR) {
+    return (
+      <EditorDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // --- DESIGNER FLOW ---
+  if (user.role === Role.DESIGNER) {
+    return (
+      <DesignerDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // --- OPS FLOW ---
+  if (user.role === Role.OPS) {
+    return (
+      <OpsDashboard
+        user={user}
+        projects={projects}
+        onRefresh={() => refreshData(user)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // --- STANDARD WORKFLOW FLOW (fallback) ---
   return (
     <>
-        <Layout 
-            user={user} 
-            onLogout={handleLogout}
-            onOpenCreate={() => setCreateModalOpen(true)}
-        >
-            <Dashboard 
-                user={user} 
-                projects={projects} 
-                refreshData={() => refreshData(user)} 
-            />
-        </Layout>
-        
-        <CreateProjectModal 
-            isOpen={isCreateModalOpen}
-            onClose={() => setCreateModalOpen(false)}
-            onSubmit={handleCreateProject}
+      <Layout
+        user={user}
+        onLogout={handleLogout}
+        onOpenCreate={() => setCreateModalOpen(true)}
+      >
+        <Dashboard
+          user={user}
+          projects={projects}
+          refreshData={() => refreshData(user)}
         />
+      </Layout>
+
+      <CreateProjectModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={handleCreateProject}
+      />
     </>
   );
 }

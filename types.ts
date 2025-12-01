@@ -19,14 +19,14 @@ export enum WorkflowStage {
   SCRIPT = 'SCRIPT',
   SCRIPT_REVIEW_L1 = 'SCRIPT_REVIEW_L1', // CMO
   SCRIPT_REVIEW_L2 = 'SCRIPT_REVIEW_L2', // CEO
-  SHOOT = 'SHOOT',
-  EDIT = 'EDIT',
-  DESIGN = 'DESIGN',
-  METADATA = 'METADATA', // Writer adds captions/tags after editing
-  FINAL_REVIEW_L1 = 'FINAL_REVIEW_L1', // CMO
-  FINAL_REVIEW_L2 = 'FINAL_REVIEW_L2', // CEO
-  PUBLISH = 'PUBLISH',
-  COMPLETED = 'COMPLETED',
+  CINEMATOGRAPHY = 'CINEMATOGRAPHY', // Cinematographer schedules shoot
+  VIDEO_EDITING = 'VIDEO_EDITING', // Editor edits video
+  THUMBNAIL_DESIGN = 'THUMBNAIL_DESIGN', // Designer creates thumbnail (video path)
+  CREATIVE_DESIGN = 'CREATIVE_DESIGN', // Designer creates creative (creative-only path)
+  FINAL_REVIEW_CMO = 'FINAL_REVIEW_CMO', // CMO Round 2
+  FINAL_REVIEW_CEO = 'FINAL_REVIEW_CEO', // CEO Round 2
+  OPS_SCHEDULING = 'OPS_SCHEDULING', // Ops schedules post
+  POSTED = 'POSTED', // Content posted/completed
 }
 
 export enum TaskStatus {
@@ -43,6 +43,7 @@ export enum UserStatus {
 }
 
 export type Priority = 'HIGH' | 'NORMAL';
+export type ContentType = 'VIDEO' | 'CREATIVE_ONLY';
 
 export interface User {
   id: string;
@@ -59,6 +60,7 @@ export interface Project {
   id: string;
   title: string;
   channel: Channel;
+  content_type: ContentType; // Video or Creative-Only
   current_stage: WorkflowStage;
   assigned_to_role: Role;
   assigned_to_user_id?: string; // Optional, usually assigned by role
@@ -66,6 +68,13 @@ export interface Project {
   priority: Priority;
   due_date: string;
   created_at: string;
+  shoot_date?: string; // Cinematographer sets
+  delivery_date?: string; // Editor/Designer sets
+  post_scheduled_date?: string; // Ops sets
+  video_link?: string; // Cinematographer uploads raw video
+  edited_video_link?: string; // Editor uploads edited video
+  thumbnail_link?: string; // Designer uploads (video path)
+  creative_link?: string; // Designer uploads (creative-only path)
   data: ProjectData; // Flexible JSON blob for form inputs
   history: HistoryEvent[];
 }
@@ -73,13 +82,7 @@ export interface Project {
 export interface ProjectData {
   script_content?: string;
   script_notes?: string;
-  shoot_date?: string;
-  shoot_location?: string;
-  raw_footage_link?: string;
-  rough_cut_link?: string;
-  master_link?: string;
-  thumbnail_link?: string;
-  design_assets_link?: string;
+  brief?: string;
   captions?: string;
   tags?: string;
   live_url?: string;
@@ -122,12 +125,12 @@ export const STAGE_LABELS: Record<WorkflowStage, string> = {
   [WorkflowStage.SCRIPT]: 'Scripting',
   [WorkflowStage.SCRIPT_REVIEW_L1]: 'Script Review (CMO)',
   [WorkflowStage.SCRIPT_REVIEW_L2]: 'Script Review (CEO)',
-  [WorkflowStage.SHOOT]: 'Production (Shooting)',
-  [WorkflowStage.EDIT]: 'Post-Production (Editing)',
-  [WorkflowStage.DESIGN]: 'Creative Design',
-  [WorkflowStage.METADATA]: 'Copy & Metadata',
-  [WorkflowStage.FINAL_REVIEW_L1]: 'Final Review (CMO)',
-  [WorkflowStage.FINAL_REVIEW_L2]: 'Final Review (CEO)',
-  [WorkflowStage.PUBLISH]: 'Publishing',
-  [WorkflowStage.COMPLETED]: 'Completed',
+  [WorkflowStage.CINEMATOGRAPHY]: 'Cinematography',
+  [WorkflowStage.VIDEO_EDITING]: 'Video Editing',
+  [WorkflowStage.THUMBNAIL_DESIGN]: 'Thumbnail Design',
+  [WorkflowStage.CREATIVE_DESIGN]: 'Creative Design',
+  [WorkflowStage.FINAL_REVIEW_CMO]: 'Final Review (CMO)',
+  [WorkflowStage.FINAL_REVIEW_CEO]: 'Final Review (CEO)',
+  [WorkflowStage.OPS_SCHEDULING]: 'Scheduling',
+  [WorkflowStage.POSTED]: 'Posted',
 };
