@@ -224,8 +224,12 @@ const TaskDetail: React.FC<Props> = ({ project, currentUserRole, onClose, onUpda
       case WorkflowStage.VIDEO_EDITING: return renderEditFields();
       case WorkflowStage.THUMBNAIL_DESIGN:
       case WorkflowStage.CREATIVE_DESIGN: return renderDesignFields();
-      case WorkflowStage.METADATA: return renderMetadataFields();
-      case WorkflowStage.PUBLISH: return renderPublishFields();
+      case WorkflowStage.FINAL_REVIEW_CMO:
+      case WorkflowStage.FINAL_REVIEW_CEO:
+        return renderScriptFields();
+      case WorkflowStage.OPS_SCHEDULING:
+      case WorkflowStage.POSTED:
+        return renderPublishFields();
       default: return <p>Details not available for this stage.</p>;
     }
   };
