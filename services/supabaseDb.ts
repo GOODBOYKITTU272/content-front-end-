@@ -74,16 +74,38 @@ export const auth = {
         try {
             // Get current session token for authentication
             console.log('Getting session...');
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            console.log('Session result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
+            let session = null;
+            let sessionError = null;
+
+            try {
+                const sessionResult = await supabase.auth.getSession();
+                session = sessionResult.data.session;
+                sessionError = sessionResult.error;
+                console.log('getSession() result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
+            } catch (getSessionErr: any) {
+                console.warn('getSession() threw error, trying getUser():', getSessionErr.message);
+                // Fallback: try getUser() instead
+                try {
+                    const { data: { user }, error: userError } = await supabase.auth.getUser();
+                    if (user && !userError) {
+                        console.log('getUser() found user, fetching session manually');
+                        const freshSession = await supabase.auth.getSession();
+                        session = freshSession.data.session;
+                    }
+                } catch (getUserErr: any) {
+                    console.error('Both getSession() and getUser() failed:', getUserErr);
+                }
+            }
 
             if (sessionError) {
                 throw new Error(`Session error: ${sessionError.message}`);
             }
 
             if (!session) {
-                throw new Error('You must be logged in to invite users');
+                throw new Error('You must be logged in to invite users. Please refresh and try again.');
             }
+
+            console.log('Session token found, calling Edge Function...');
 
             // Call the Edge Function (service key is secure on server)
             console.log('Calling Edge Function at:', `${supabaseUrl}/functions/v1/invite-user`);
