@@ -245,6 +245,41 @@ export const users = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // Delete user (from both Auth and Database)
+    async delete(id: string) {
+        // Get user details for logging
+        const { data: user } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        // Delete from database first
+        const { error: dbError } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', id);
+
+        if (dbError) throw new Error(`Database deletion failed: ${dbError.message}`);
+
+        // Delete from Supabase Auth (requires admin access via Edge Function)
+        //Note cannot delete from auth directly from client - would need an Edge Function
+        // For now, just delete from database - auth user will remain but won't be able to login
+
+        // Log user deletion
+        if (user) {
+            await systemLogs.add({
+                actor_id: id,
+                actor_name: user.full_name,
+                actor_role: user.role,
+                action: 'USER_DELETED',
+                details: `User ${user.full_name} (${user.email}) was deleted`
+            });
+        }
+
+        return true;
     }
 };
 
@@ -824,6 +859,10 @@ export const db = {
 
     async updateUser(id: string, updates: Partial<User>) {
         await users.update(id, updates);
+    },
+
+    async deleteUser(id: string) {
+        return await users.delete(id);
     },
 
     // --- Project Management ---
