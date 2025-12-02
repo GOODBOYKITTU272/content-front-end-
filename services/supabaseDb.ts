@@ -269,13 +269,13 @@ export const users = {
         // For now, just delete from database - auth user will remain but won't be able to login
 
         // Log user deletion
-        if (user) {
+        if (user && currentUserCache) {
             await systemLogs.add({
-                actor_id: id,
-                actor_name: user.full_name,
-                actor_role: user.role,
+                actor_id: currentUserCache.id,
+                actor_name: currentUserCache.full_name,
+                actor_role: currentUserCache.role,
                 action: 'USER_DELETED',
-                details: `User ${user.full_name} (${user.email}) was deleted`
+                details: `User ${user.full_name} (${user.email}) was deleted by ${currentUserCache.full_name}`
             });
         }
 
