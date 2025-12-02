@@ -71,36 +71,53 @@ export const auth = {
         console.log('inviteUser called with:', email, userData);
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
 
-        // Get current session token for authentication
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Session:', session ? 'Found' : 'Not found');
+        try {
+            // Get current session token for authentication
+            console.log('Getting session...');
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            console.log('Session result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
 
-        if (!session) {
-            throw new Error('You must be logged in to invite users');
+            if (sessionError) {
+                throw new Error(`Session error: ${sessionError.message}`);
+            }
+
+            if (!session) {
+                throw new Error('You must be logged in to invite users');
+            }
+
+            // Call the Edge Function (service key is secure on server)
+            console.log('Calling Edge Function at:', `${supabaseUrl}/functions/v1/invite-user`);
+            const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, userData })
+            });
+
+            console.log('Edge Function response status:', response.status);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Edge Function error response:', errorText);
+                let errorMessage;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || 'Failed to invite user';
+                } catch {
+                    errorMessage = errorText || 'Failed to invite user';
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            console.log('Edge Function success:', data);
+            return data.user;
+        } catch (error: any) {
+            console.error('inviteUser error:', error);
+            throw error;
         }
-
-        // Call the Edge Function (service key is secure on server)
-        console.log('Calling Edge Function at:', `${supabaseUrl}/functions/v1/invite-user`);
-        const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, userData })
-        });
-
-        console.log('Edge Function response status:', response.status);
-
-        if (!response.ok) {
-            const error = await response.json();
-            console.error('Edge Function error:', error);
-            throw new Error(error.error || 'Failed to invite user');
-        }
-
-        const data = await response.json();
-        console.log('Edge Function success:', data);
-        return data.user;
     }
 };
 
