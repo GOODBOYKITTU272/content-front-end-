@@ -66,25 +66,34 @@ export const auth = {
         if (error) throw error;
     },
 
-    // Invite user by email (Admin only)
-    // SECURITY: This function is DISABLED until Edge Function is properly deployed
-    // DO NOT use service role key in client code - it's a critical security vulnerability
+    // Invite user by email (Admin only) - Calls secure Edge Function
     async inviteUser(email: string, userData: { full_name: string; role: Role; phone?: string }) {
-        throw new Error(
-            'inviteUser is disabled for security reasons. ' +
-            'Service role key must not be exposed in client code. ' +
-            'Deploy Edge Function at supabase/functions/invite-user/ and call that instead.'
-        );
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
 
-        // TODO: Replace with Edge Function call:
-        // const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
-        //     method: 'POST',
-        //     headers: {
-        //         'Authorization': `Bearer ${anonKey}`,
-        //         'Content-Type': 'application/json'
-        //     },
-        //     body: JSON.stringify({ email, userData })
-        // });
+        // Get current session token for authentication
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+            throw new Error('You must be logged in to invite users');
+        }
+
+        // Call the Edge Function (service key is secure on server)
+        const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, userData })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to invite user');
+        }
+
+        const data = await response.json();
+        return data.user;
     }
 };
 
