@@ -77,38 +77,52 @@ export const auth = {
             let session = null;
             let sessionError = null;
 
-            try {
-                // Race getSession against a timeout to prevent hanging from browser extensions
-                const sessionPromise = supabase.auth.getSession();
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Session retrieval timed out')), 5000)
-                );
+            // Helper to race a promise against a timeout
+            const withTimeout = (promise: Promise<any>, ms: number, name: string) => {
+                return Promise.race([
+                    promise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms))
+                ]);
+            };
 
-                const sessionResult: any = await Promise.race([sessionPromise, timeoutPromise]);
+            try {
+                // 1. Try getSession with 10s timeout
+                const sessionResult: any = await withTimeout(
+                    supabase.auth.getSession(),
+                    10000,
+                    'getSession'
+                );
 
                 session = sessionResult.data.session;
                 sessionError = sessionResult.error;
                 console.log('getSession() result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
             } catch (getSessionErr: any) {
-                console.warn('getSession() failed or timed out, trying refreshSession():', getSessionErr.message);
+                console.warn('getSession() failed or timed out:', getSessionErr.message);
 
-                // Fallback: try refreshSession() explicitly
+                // 2. Fallback: try refreshSession() with 10s timeout
                 try {
-                    const { data, error: refreshError } = await supabase.auth.refreshSession();
+                    console.log('Attempting refreshSession()...');
+                    const refreshResult: any = await withTimeout(
+                        supabase.auth.refreshSession(),
+                        10000,
+                        'refreshSession'
+                    );
+
+                    const { data, error: refreshError } = refreshResult;
+
                     if (data.session && !refreshError) {
                         console.log('refreshSession() succeeded');
                         session = data.session;
                     } else {
-                        // Last resort: getUser()
-                        console.warn('refreshSession() failed, trying getUser() check');
-                        const { data: { user }, error: userError } = await supabase.auth.getUser();
-                        if (user && !userError) {
-                            console.log('getUser() found user, but no session token available. Cannot call Edge Function.');
-                            // We are stuck here without a token.
+                        console.warn('refreshSession() returned no session or error:', refreshError);
+                        // 3. Last resort: getUser() check (just for debugging)
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                            console.log('getUser() found user, but we have no session token. Edge Function call will likely fail.');
                         }
                     }
                 } catch (refreshErr: any) {
-                    console.error('All session recovery attempts failed:', refreshErr);
+                    console.error('refreshSession() failed or timed out:', refreshErr.message);
                 }
             }
 
@@ -117,7 +131,7 @@ export const auth = {
             }
 
             if (!session) {
-                throw new Error('You must be logged in to invite users. Please refresh and try again.');
+                throw new Error('Unable to retrieve active session. Please check your connection or try logging in again.');
             }
 
             console.log('Session token found, calling Edge Function...');
