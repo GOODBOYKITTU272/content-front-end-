@@ -81,7 +81,7 @@ export const auth = {
                 // Race getSession against a timeout to prevent hanging from browser extensions
                 const sessionPromise = supabase.auth.getSession();
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Session retrieval timed out')), 3000)
+                    setTimeout(() => reject(new Error('Session retrieval timed out')), 5000)
                 );
 
                 const sessionResult: any = await Promise.race([sessionPromise, timeoutPromise]);
@@ -90,20 +90,25 @@ export const auth = {
                 sessionError = sessionResult.error;
                 console.log('getSession() result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
             } catch (getSessionErr: any) {
-                console.warn('getSession() failed or timed out, trying getUser():', getSessionErr.message);
-                // Fallback: try getUser() instead
+                console.warn('getSession() failed or timed out, trying refreshSession():', getSessionErr.message);
+
+                // Fallback: try refreshSession() explicitly
                 try {
-                    const { data: { user }, error: userError } = await supabase.auth.getUser();
-                    if (user && !userError) {
-                        console.log('getUser() found user, fetching session manually');
-                        // If getUser works, we might be able to get the session now, or we might need to rely on the user object
-                        // But we need the access_token for the Edge Function. 
-                        // If getSession hangs, we might be stuck. But often getUser works when getSession doesn't.
-                        const freshSession = await supabase.auth.getSession();
-                        session = freshSession.data.session;
+                    const { data, error: refreshError } = await supabase.auth.refreshSession();
+                    if (data.session && !refreshError) {
+                        console.log('refreshSession() succeeded');
+                        session = data.session;
+                    } else {
+                        // Last resort: getUser()
+                        console.warn('refreshSession() failed, trying getUser() check');
+                        const { data: { user }, error: userError } = await supabase.auth.getUser();
+                        if (user && !userError) {
+                            console.log('getUser() found user, but no session token available. Cannot call Edge Function.');
+                            // We are stuck here without a token.
+                        }
                     }
-                } catch (getUserErr: any) {
-                    console.error('Both getSession() and getUser() failed:', getUserErr);
+                } catch (refreshErr: any) {
+                    console.error('All session recovery attempts failed:', refreshErr);
                 }
             }
 
