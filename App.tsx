@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { db } from './services/supabaseDb';
 import { User, Project, Channel, Role } from './types';
 import Auth from './components/Auth';
@@ -14,6 +15,7 @@ import UserManagement from './components/admin/UserManagement';
 import AddUser from './components/admin/AddUser';
 import RolesMatrix from './components/admin/RolesMatrix';
 import AuditLogs from './components/admin/AuditLogs';
+import SetPassword from './components/SetPassword';
 
 // CEO Imports
 import CeoDashboard from './components/ceo/CeoDashboard';
@@ -37,6 +39,7 @@ import DesignerDashboard from './components/designer/DesignerDashboard';
 import OpsDashboard from './components/ops/OpsDashboard';
 
 function App() {
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -90,6 +93,11 @@ function App() {
     await db.createProject(title, channel, dueDate);
     refreshData(user!);
   };
+
+  // Handle Set Password Route
+  if (location.pathname === '/set-password') {
+    return <SetPassword />;
+  }
 
   if (!user) {
     return <Auth onLogin={handleLogin} />;
