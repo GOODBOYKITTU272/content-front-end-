@@ -54,19 +54,37 @@ function App() {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Wait for Supabase to restore session
-        const authUser = await db.auth.getCurrentUser();
-        if (authUser) {
+        console.log('Initializing auth...');
+
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session check timeout')), 5000)
+        );
+
+        const authPromise = db.auth.getCurrentUser();
+
+        // Wait for Supabase to restore session (with timeout)
+        const authUser = await Promise.race([authPromise, timeoutPromise]) as any;
+
+        console.log('Auth user:', authUser ? 'Found' : 'Not found');
+
+        if (authUser && authUser.email) {
           // Get full user data from database
-          const fullUser = await db.users.getByEmail(authUser.email || '');
+          const fullUser = await db.users.getByEmail(authUser.email);
+          console.log('Full user:', fullUser ? 'Found' : 'Not found');
+
           if (fullUser) {
             setUser(fullUser);
-            refreshData(fullUser);
+            await refreshData(fullUser);
+          } else {
+            console.warn('User profile not found in database');
           }
         }
       } catch (error) {
         console.error('Failed to initialize auth:', error);
+        // Even if there's an error, we should show the login page
       } finally {
+        console.log('Setting loading to false');
         setLoading(false);
       }
     };

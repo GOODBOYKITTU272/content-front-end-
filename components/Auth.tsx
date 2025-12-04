@@ -36,15 +36,31 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         }
     };
 
-    const handleResetPassword = (e: React.FormEvent) => {
-        e.preventDefault();
 
-        if (resetEmail) {
-            console.log('Password reset for:', resetEmail);
-            // TODO: Replace with Supabase password reset
-            alert(`Password reset link will be sent to ${resetEmail}`);
-            setShowResetPassword(false);
-            setResetEmail('');
+    const handleResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+        setIsLoading(true);
+
+        try {
+            if (resetEmail) {
+                console.log('Sending password reset for:', resetEmail);
+
+                // Call Supabase password reset
+                await db.auth.resetPassword(resetEmail);
+
+                // Show success message
+                alert(`✅ Password reset link sent to ${resetEmail}\n\nPlease check your email and click the link to reset your password.`);
+
+                // Close modal and clear form
+                setShowResetPassword(false);
+                setResetEmail('');
+            }
+        } catch (err: any) {
+            console.error('Password reset failed:', err);
+            setError(err.message || 'Failed to send password reset email. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -238,6 +254,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                         </div>
 
                         <form onSubmit={handleResetPassword} className="space-y-6">
+                            {error && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 flex items-start">
+                                    <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+                                    <p className="text-red-700 text-sm font-medium">{error}</p>
+                                </div>
+                            )}
+
                             {/* Email Field */}
                             <div>
                                 <label className="block text-sm font-bold uppercase text-slate-700 mb-2">Email Address</label>
@@ -246,7 +269,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                                     <input
                                         type="email"
                                         value={resetEmail}
-                                        onChange={(e) => setResetEmail(e.target.value)}
+                                        onChange={(e) => setResetEmail(e.target.value.toLowerCase())}
                                         placeholder="you@applywizz.com"
                                         required
                                         className="w-full pl-12 pr-4 py-4 border-2 border-slate-300 rounded-none focus:border-black focus:ring-0 bg-slate-50 outline-none transition-all font-medium"
@@ -257,10 +280,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             {/* Send Reset Link Button */}
                             <button
                                 type="submit"
-                                className="w-full bg-amber-500 hover:bg-amber-600 text-white p-4 border-2 border-black font-black uppercase flex items-center justify-center space-x-2 transition-all shadow-[6px_6px_0px_0px_rgba(100,100,100,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(100,100,100,1)] text-lg tracking-wide"
+                                disabled={isLoading}
+                                className={`w-full bg-amber-500 hover:bg-amber-600 text-white p-4 border-2 border-black font-black uppercase flex items-center justify-center space-x-2 transition-all shadow-[6px_6px_0px_0px_rgba(100,100,100,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(100,100,100,1)] text-lg tracking-wide ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
-                                <span>Send Reset Link</span>
-                                <ArrowRight className="w-5 h-5" />
+                                {isLoading ? (
+                                    <>
+                                        <Loader className="w-5 h-5 animate-spin" />
+                                        <span>Sending...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Send Reset Link</span>
+                                        <ArrowRight className="w-5 h-5" />
+                                    </>
+                                )}
                             </button>
 
                             {/* Back to Login */}
