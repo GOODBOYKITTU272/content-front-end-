@@ -57,50 +57,16 @@ function App() {
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
-  // Initialize checks - Quick session check first
+  // Initialize checks - Silent session restore
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        console.log('Checking for existing session...');
-
-        // Quick synchronous check for session token
-        const hasSession = localStorage.getItem('sb-zxnevoulicmapqmniaos-auth-token');
-
-        if (!hasSession) {
-          // No session found, show login immediately
-          console.log('No session found, showing login');
-          setLoading(false);
-          return;
-        }
-
-        // Session exists, verify and restore
-        console.log('Session found, verifying...');
-        setCountdown(5);
-        const countdownInterval = setInterval(() => {
-          setCountdown(prev => Math.max(1, prev - 1));
-        }, 1000);
-
-        // Wait for Supabase to restore session (20 second timeout for slow networks)
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Session check timeout')), 20000)
-        );
-
-        let authUser;
-        try {
-          authUser = await Promise.race([db.auth.getCurrentUser(), timeoutPromise]) as any;
-        } catch (timeoutError) {
-          console.warn('Session check timed out after 20 seconds, showing login');
-          clearInterval(countdownInterval);
-          setLoading(false);
-          return;
-        }
-
-        console.log('Auth user:', authUser ? 'Found' : 'Not found');
+        // Try to get existing session silently (no loader)
+        const authUser = await db.auth.getCurrentUser();
 
         if (authUser && authUser.email) {
-          // Get full user data from database
+          // Session exists - restore user silently
           const fullUser = await db.users.getByEmail(authUser.email);
-          console.log('Full user:', fullUser ? 'Found' : 'Not found');
 
           if (fullUser) {
             setUser(fullUser);
@@ -109,13 +75,12 @@ function App() {
             console.warn('User profile not found in database');
           }
         }
-
-        clearInterval(countdownInterval);
       } catch (error) {
         console.error('Failed to initialize auth:', error);
-        // Even if there's an error, we should show the login page
+        // On error, clear any stale session
+        localStorage.removeItem('sb-zxnevoulicmapqmniaos-auth-token');
       } finally {
-        console.log('Setting loading to false');
+        // Always stop loading - either show dashboard or login
         setLoading(false);
       }
     };
