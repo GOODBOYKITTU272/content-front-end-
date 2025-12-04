@@ -18,13 +18,6 @@ import {
 export const auth = {
     // Sign in with email/password
     async signIn(email: string, password: string) {
-        // Clear any stale sessions before login
-        try {
-            await supabase.auth.signOut({ scope: 'local' });
-        } catch (e) {
-            // Ignore signOut errors, continue with login
-        }
-
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password
