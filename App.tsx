@@ -1,14 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import Lottie from 'lottie-react';
 import { db } from './services/supabaseDb';
 import { User, Project, Channel, Role } from './types';
 import Auth from './components/Auth';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import CreateProjectModal from './components/CreateProjectModal';
-import mindReloadAnimation from './public/animations/mind-reload.json';
 
 // Admin Imports
 import AdminLayout, { AdminView } from './components/AdminLayout';
@@ -47,6 +45,7 @@ function App() {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState(5);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
@@ -55,11 +54,28 @@ function App() {
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
-  // Initialize checks
+  // Initialize checks - Quick session check first
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
+        console.log('Checking for existing session...');
+
+        // Quick synchronous check for session token
+        const hasSession = localStorage.getItem('sb-zxnevoulicmapqmniaos-auth-token');
+
+        if (!hasSession) {
+          // No session found, show login immediately
+          console.log('No session found, showing login');
+          setLoading(false);
+          return;
+        }
+
+        // Session exists, verify and restore
+        console.log('Session found, verifying...');
+        setCountdown(5);
+        const countdownInterval = setInterval(() => {
+          setCountdown(prev => Math.max(1, prev - 1));
+        }, 1000);
 
         // Add timeout to prevent infinite loading
         const timeoutPromise = new Promise((_, reject) =>
@@ -85,6 +101,8 @@ function App() {
             console.warn('User profile not found in database');
           }
         }
+
+        clearInterval(countdownInterval);
       } catch (error) {
         console.error('Failed to initialize auth:', error);
         // Even if there's an error, we should show the login page
@@ -151,10 +169,13 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center space-y-6">
-          <div className="w-48 h-48 mx-auto">
-            <Lottie animationData={mindReloadAnimation} loop={true} />
+          <div className="w-32 h-32 rounded-full border-4 border-black flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mx-auto">
+            <span className="text-6xl font-black text-white">{countdown}</span>
           </div>
-          <p className="text-slate-700 font-bold uppercase tracking-wide text-lg">Loading your workspace...</p>
+          <div className="space-y-2">
+            <p className="text-2xl font-black text-slate-900 uppercase tracking-tight">Restoring your workspace</p>
+            <p className="text-lg text-slate-600 font-medium">in {countdown} second{countdown !== 1 ? 's' : ''}...</p>
+          </div>
         </div>
       </div>
     );
