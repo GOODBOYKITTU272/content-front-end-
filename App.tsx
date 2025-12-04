@@ -56,290 +56,204 @@ function App() {
     return saved || 'DASH';
   });
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
-  const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
-  // Initialize checks - Silent session restore
-  useEffect(() => {
-    const initializeAuth = async () => {
-      console.log('🔍 Starting session check...');
-      try {
-        // First, check if there's an active Supabase session
-        console.log('📡 Calling getSession()...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  initializeAuth();
+}, []);
 
-        if (sessionError) {
-          console.error('❌ Session error:', sessionError);
-          throw sessionError;
-        }
+// Save admin view to localStorage when it changes
+useEffect(() => {
+  if (user?.role === Role.ADMIN && adminView) {
+    localStorage.setItem('admin_last_view', adminView);
+  }
+}, [adminView, user]);
 
-        console.log('📦 Session result:', session ? '✅ Session exists' : '❌ No session');
+const refreshData = async (u: User = user!) => {
+  if (!u) return;
 
-        if (session) {
-          console.log('👤 Session found, fetching user...');
-          // Session exists - get auth user
-          const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+  if (u.role === Role.ADMIN) {
+    const users = await db.getUsers();
+    setAdminUsers([...users]);
+    const logs = await db.getSystemLogs();
+    setAdminLogs([...logs]);
+    // adminView is already initialized from localStorage on mount - no need to restore here
+  } else {
+    const userProjects = await db.getProjects(u);
+    setProjects([...userProjects]);
+  }
+};
 
-          if (userError) {
-            console.error('❌ User fetch error:', userError);
-            throw userError;
-          }
+const handleLogin = async () => {
+  try {
+    // Get authenticated user from Supabase
+    const authUser = await db.auth.getCurrentUser();
 
-          console.log('👤 Auth user:', authUser ? `✅ ${authUser.email}` : '❌ No user');
+    if (authUser && authUser.email) {
+      // Get full user data from database
+      const fullUser = await db.users.getByEmail(authUser.email);
 
-          if (authUser && authUser.email) {
-            console.log('💾 Fetching profile from database...');
-            // Get full user profile from database
-            const fullUser = await db.users.getByEmail(authUser.email);
-
-            console.log('💾 Profile result:', fullUser ? `✅ ${fullUser.full_name}` : '❌ No profile');
-
-            if (fullUser) {
-              setUser(fullUser);
-              console.log('📊 Refreshing data for user...');
-              await refreshData(fullUser);
-              console.log('✅ Session restored for:', fullUser.full_name);
-            } else {
-              console.warn('⚠️ Auth user found but no profile in database for:', authUser.email);
-            }
-          } else {
-            console.warn('⚠️ Session exists but no auth user data');
-          }
-        } else {
-          console.log('ℹ️ No active session - showing login');
-        }
-      } catch (error) {
-        console.error('💥 Session restoration failed:', error);
-        // On error, clear any stale session
-        console.log('🧹 Clearing stale session...');
-        await supabase.auth.signOut();
-      } finally {
-        console.log('✅ Session check complete - setting loading to false');
-        // Always stop loading - either show dashboard or login
-        setLoading(false);
+      if (fullUser) {
+        setUser(fullUser);
+        await refreshData(fullUser);
+      } else {
+        console.error('User profile not found in database');
       }
-    };
-
-    initializeAuth();
-  }, []);
-
-  // Save admin view to localStorage when it changes
-  useEffect(() => {
-    if (user?.role === Role.ADMIN && adminView) {
-      localStorage.setItem('admin_last_view', adminView);
     }
-  }, [adminView, user]);
-
-  const refreshData = async (u: User = user!) => {
-    if (!u) return;
-
-    if (u.role === Role.ADMIN) {
-      const users = await db.getUsers();
-      setAdminUsers([...users]);
-      const logs = await db.getSystemLogs();
-      setAdminLogs([...logs]);
-      // adminView is already initialized from localStorage on mount - no need to restore here
-    } else {
-      const userProjects = await db.getProjects(u);
-      setProjects([...userProjects]);
-    }
-  };
-
-  const handleLogin = async () => {
-    try {
-      // Get authenticated user from Supabase
-      const authUser = await db.auth.getCurrentUser();
-
-      if (authUser && authUser.email) {
-        // Get full user data from database
-        const fullUser = await db.users.getByEmail(authUser.email);
-
-        if (fullUser) {
-          setUser(fullUser);
-          await refreshData(fullUser);
-        } else {
-          console.error('User profile not found in database');
-        }
-      }
-    } catch (error) {
-      console.error('Login callback failed:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await db.logout();
-      setUser(null);
-      setProjects([]);
-      setAdminUsers([]);
-      setAdminLogs([]);
-      setAdminView('DASH');
-      setLoading(false);
-
-      // Clear saved admin view
-      localStorage.removeItem('admin_last_view');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
-
-  const handleCreateProject = async (title: string, channel: Channel, dueDate: string) => {
-    await db.createProject(title, channel, dueDate);
-    refreshData(user!);
-  };
-
-  // Handle Set Password Route
-  if (location.pathname === '/set-password') {
-    return <SetPassword />;
+  } catch (error) {
+    console.error('Login callback failed:', error);
   }
+};
 
-  // Wait for session check to complete before showing login
-  if (loading) {
-    return null; // Or a minimal loading spinner if desired
+const handleLogout = async () => {
+  try {
+    await db.logout();
+    setUser(null);
+    setProjects([]);
+    setAdminUsers([]);
+    setAdminLogs([]);
+    setAdminView('DASH');
+    setLoading(false);
+
+    // Clear saved admin view
+    localStorage.removeItem('admin_last_view');
+  } catch (error) {
+    console.error('Logout failed:', error);
   }
-
-  // Show login if no user after session check completes
-  if (!user) {
-    return <Auth onLogin={handleLogin} />;
-  }
-
-  // --- ADMIN FLOW ---
-  if (user.role === Role.ADMIN) {
-    return (
-      <AdminLayout
-        user={user}
-        currentView={adminView}
-        onNavigate={setAdminView}
-        onLogout={handleLogout}
-      >
-        {adminView === 'DASH' && <AdminDashboard users={adminUsers} logs={adminLogs} onNavigate={setAdminView} />}
-        {adminView === 'USERS' && <UserManagement users={adminUsers} logs={adminLogs} onRefresh={() => refreshData(user)} onNavigate={setAdminView} />}
-        {adminView === 'USER_ADD' && <AddUser onBack={() => setAdminView('USERS')} onUserAdded={() => { refreshData(user); setAdminView('USERS'); }} />}
-        {adminView === 'ROLES' && <RolesMatrix />}
-        {adminView === 'LOGS' && <AuditLogs logs={adminLogs} />}
-        {adminView === 'SETTINGS' && (
-          <div className="flex flex-col items-center justify-center h-96 text-slate-400">
-            <div className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-full flex items-center justify-center mb-4">
-              <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse"></div>
-            </div>
-            <h3 className="text-lg font-medium text-slate-600">Settings Module</h3>
-            <p>Coming in v1.2</p>
-          </div>
-        )}
-      </AdminLayout>
-    );
-  }
-
-  // --- CEO FLOW ---
-  if (user.role === Role.CEO) {
-    return (
-      <CeoDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- CMO FLOW ---
-  if (user.role === Role.CMO) {
-    return (
-      <CmoDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- WRITER FLOW ---
-  if (user.role === Role.WRITER) {
-    return (
-      <WriterDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- CINEMATOGRAPHER FLOW ---
-  if (user.role === Role.CINE) {
-    return (
-      <CineDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- EDITOR FLOW ---
-  if (user.role === Role.EDITOR) {
-    return (
-      <EditorDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- DESIGNER FLOW ---
-  if (user.role === Role.DESIGNER) {
-    return (
-      <DesignerDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- OPS FLOW ---
-  if (user.role === Role.OPS) {
-    return (
-      <OpsDashboard
-        user={user}
-        projects={projects}
-        onRefresh={() => refreshData(user)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // --- OBSERVER FLOW ---
-  if (user.role === Role.OBSERVER) {
-    return <ObserverDashboard user={user} onLogout={handleLogout} />;
-  }
-
-  // --- STANDARD WORKFLOW FLOW (fallback) ---
-  return (
-    <>
-      <Layout
-        user={user}
-        onLogout={handleLogout}
-        onOpenCreate={() => setCreateModalOpen(true)}
-      >
-        <Dashboard
-          user={user}
-          projects={projects}
-          refreshData={() => refreshData(user)}
-        />
-      </Layout>
-
-      <CreateProjectModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        onSubmit={handleCreateProject}
-      />
-    </>
+};
+currentView = { adminView }
+onNavigate = { setAdminView }
+onLogout = { handleLogout }
+  >
+  { adminView === 'DASH' && <AdminDashboard users={adminUsers} logs={adminLogs} onNavigate={setAdminView} />}
+{ adminView === 'USERS' && <UserManagement users={adminUsers} logs={adminLogs} onRefresh={() => refreshData(user)} onNavigate={setAdminView} /> }
+{ adminView === 'USER_ADD' && <AddUser onBack={() => setAdminView('USERS')} onUserAdded={() => { refreshData(user); setAdminView('USERS'); }} /> }
+{ adminView === 'ROLES' && <RolesMatrix /> }
+{ adminView === 'LOGS' && <AuditLogs logs={adminLogs} /> }
+{
+  adminView === 'SETTINGS' && (
+    <div className="flex flex-col items-center justify-center h-96 text-slate-400">
+      <div className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-full flex items-center justify-center mb-4">
+        <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse"></div>
+      </div>
+      <h3 className="text-lg font-medium text-slate-600">Settings Module</h3>
+      <p>Coming in v1.2</p>
+    </div>
+  )
+}
+    </AdminLayout >
   );
+}
+
+// --- CEO FLOW ---
+if (user.role === Role.CEO) {
+  return (
+    <CeoDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- CMO FLOW ---
+if (user.role === Role.CMO) {
+  return (
+    <CmoDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- WRITER FLOW ---
+if (user.role === Role.WRITER) {
+  return (
+    <WriterDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- CINEMATOGRAPHER FLOW ---
+if (user.role === Role.CINE) {
+  return (
+    <CineDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- EDITOR FLOW ---
+if (user.role === Role.EDITOR) {
+  return (
+    <EditorDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- DESIGNER FLOW ---
+if (user.role === Role.DESIGNER) {
+  return (
+    <DesignerDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- OPS FLOW ---
+if (user.role === Role.OPS) {
+  return (
+    <OpsDashboard
+      user={user}
+      projects={projects}
+      onRefresh={() => refreshData(user)}
+      onLogout={handleLogout}
+    />
+  );
+}
+
+// --- OBSERVER FLOW ---
+if (user.role === Role.OBSERVER) {
+  return <ObserverDashboard user={user} onLogout={handleLogout} />;
+}
+
+// --- STANDARD WORKFLOW FLOW (fallback) ---
+return (
+  <>
+    <Layout
+      user={user}
+      onLogout={handleLogout}
+      onOpenCreate={() => setCreateModalOpen(true)}
+    >
+      <Dashboard
+        user={user}
+        projects={projects}
+        refreshData={() => refreshData(user)}
+      />
+    </Layout>
+
+    <CreateProjectModal
+      isOpen={isCreateModalOpen}
+      onClose={() => setCreateModalOpen(false)}
+      onSubmit={handleCreateProject}
+    />
+  </>
+);
 }
 
 export default App;
