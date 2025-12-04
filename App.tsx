@@ -61,34 +61,59 @@ function App() {
   // Initialize checks - Silent session restore
   useEffect(() => {
     const initializeAuth = async () => {
+      console.log('🔍 Starting session check...');
       try {
         // First, check if there's an active Supabase session
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('📡 Calling getSession()...');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+          throw sessionError;
+        }
+
+        console.log('📦 Session result:', session ? '✅ Session exists' : '❌ No session');
 
         if (session) {
+          console.log('👤 Session found, fetching user...');
           // Session exists - get auth user
-          const { data: { user: authUser } } = await supabase.auth.getUser();
+          const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+
+          if (userError) {
+            console.error('❌ User fetch error:', userError);
+            throw userError;
+          }
+
+          console.log('👤 Auth user:', authUser ? `✅ ${authUser.email}` : '❌ No user');
 
           if (authUser && authUser.email) {
+            console.log('💾 Fetching profile from database...');
             // Get full user profile from database
             const fullUser = await db.users.getByEmail(authUser.email);
 
+            console.log('💾 Profile result:', fullUser ? `✅ ${fullUser.full_name}` : '❌ No profile');
+
             if (fullUser) {
               setUser(fullUser);
+              console.log('📊 Refreshing data for user...');
               await refreshData(fullUser);
               console.log('✅ Session restored for:', fullUser.full_name);
             } else {
-              console.warn('⚠️ Auth user found but no profile in database');
+              console.warn('⚠️ Auth user found but no profile in database for:', authUser.email);
             }
+          } else {
+            console.warn('⚠️ Session exists but no auth user data');
           }
         } else {
-          console.log('No active session - showing login');
+          console.log('ℹ️ No active session - showing login');
         }
       } catch (error) {
-        console.error('Failed to initialize auth:', error);
+        console.error('💥 Session restoration failed:', error);
         // On error, clear any stale session
+        console.log('🧹 Clearing stale session...');
         await supabase.auth.signOut();
       } finally {
+        console.log('✅ Session check complete - setting loading to false');
         // Always stop loading - either show dashboard or login
         setLoading(false);
       }
