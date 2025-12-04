@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { supabase } from './services/supabase';
 import { db } from './services/supabaseDb';
 import { User, Project, Channel, Role } from './types';
 import Auth from './components/Auth';
@@ -61,24 +62,32 @@ function App() {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Try to get existing session silently (no loader)
-        const authUser = await db.auth.getCurrentUser();
+        // First, check if there's an active Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (authUser && authUser.email) {
-          // Session exists - restore user silently
-          const fullUser = await db.users.getByEmail(authUser.email);
+        if (session) {
+          // Session exists - get auth user
+          const { data: { user: authUser } } = await supabase.auth.getUser();
 
-          if (fullUser) {
-            setUser(fullUser);
-            await refreshData(fullUser);
-          } else {
-            console.warn('User profile not found in database');
+          if (authUser && authUser.email) {
+            // Get full user profile from database
+            const fullUser = await db.users.getByEmail(authUser.email);
+
+            if (fullUser) {
+              setUser(fullUser);
+              await refreshData(fullUser);
+              console.log('✅ Session restored for:', fullUser.full_name);
+            } else {
+              console.warn('⚠️ Auth user found but no profile in database');
+            }
           }
+        } else {
+          console.log('No active session - showing login');
         }
       } catch (error) {
         console.error('Failed to initialize auth:', error);
         // On error, clear any stale session
-        localStorage.removeItem('sb-zxnevoulicmapqmniaos-auth-token');
+        await supabase.auth.signOut();
       } finally {
         // Always stop loading - either show dashboard or login
         setLoading(false);
