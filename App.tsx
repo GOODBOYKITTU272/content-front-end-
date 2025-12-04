@@ -42,6 +42,7 @@ function App() {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState(5);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
@@ -91,6 +92,18 @@ function App() {
 
     initializeAuth();
   }, []);
+
+  // Countdown loader while checking session
+  useEffect(() => {
+    if (!loading) return;
+
+    setCountdown(5);
+    const timer = setInterval(() => {
+      setCountdown(prev => (prev > 1 ? prev - 1 : 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loading]);
 
   const refreshData = async (u: User = user!) => {
     if (!u) return;
@@ -145,9 +158,11 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 font-medium">Loading...</p>
+        <div className="text-center space-y-4">
+          <div className="w-24 h-24 rounded-full border-4 border-black flex items-center justify-center bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <span className="text-4xl font-black text-slate-900">{countdown}</span>
+          </div>
+          <p className="text-slate-600 font-medium uppercase tracking-wide">Preparing your session</p>
         </div>
       </div>
     );
