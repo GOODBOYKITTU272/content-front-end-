@@ -41,6 +41,7 @@ import OpsDashboard from './components/ops/OpsDashboard';
 function App() {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
@@ -51,11 +52,26 @@ function App() {
 
   // Initialize checks
   useEffect(() => {
-    const currentUser = db.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-      refreshData(currentUser);
-    }
+    const initializeAuth = async () => {
+      try {
+        // Wait for Supabase to restore session
+        const authUser = await db.auth.getCurrentUser();
+        if (authUser) {
+          // Get full user data from database
+          const fullUser = await db.users.getByEmail(authUser.email || '');
+          if (fullUser) {
+            setUser(fullUser);
+            refreshData(fullUser);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
   const refreshData = async (u: User = user!) => {
@@ -84,9 +100,17 @@ function App() {
   };
 
   const handleLogout = async () => {
-    await db.logout();
-    setUser(null);
-    setProjects([]);
+    try {
+      await db.logout();
+      setUser(null);
+      setProjects([]);
+      setAdminUsers([]);
+      setAdminLogs([]);
+      setAdminView('DASH');
+      setLoading(false);
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   const handleCreateProject = async (title: string, channel: Channel, dueDate: string) => {
@@ -97,6 +121,18 @@ function App() {
   // Handle Set Password Route
   if (location.pathname === '/set-password') {
     return <SetPassword />;
+  }
+
+  // Show loading state while checking session
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
