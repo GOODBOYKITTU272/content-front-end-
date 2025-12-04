@@ -163,23 +163,7 @@ function App() {
     return <SetPassword />;
   }
 
-  // Show loading state while checking session
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center space-y-6">
-          <div className="w-32 h-32 rounded-full border-4 border-black flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mx-auto">
-            <span className="text-6xl font-black text-white">{countdown}</span>
-          </div>
-          <div className="space-y-2">
-            <p className="text-2xl font-black text-slate-900 uppercase tracking-tight">Restoring your workspace</p>
-            <p className="text-lg text-slate-600 font-medium">in {countdown} second{countdown !== 1 ? 's' : ''}...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // No loading screen - session restores silently in background
   if (!user) {
     return <Auth onLogin={handleLogin} />;
   }
