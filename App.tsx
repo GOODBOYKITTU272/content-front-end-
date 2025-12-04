@@ -167,7 +167,12 @@ function App() {
     return <SetPassword />;
   }
 
-  // No loading screen - session restores silently in background
+  // Wait for session check to complete before showing login
+  if (loading) {
+    return null; // Or a minimal loading spinner if desired
+  }
+
+  // Show login if no user after session check completes
   if (!user) {
     return <Auth onLogin={handleLogin} />;
   }
