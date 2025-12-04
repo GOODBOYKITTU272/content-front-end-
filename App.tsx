@@ -80,8 +80,20 @@ function App() {
           setCountdown(prev => Math.max(1, prev - 1));
         }, 1000);
 
-        // Wait for Supabase to restore session (no timeout - let it complete naturally)
-        const authUser = await db.auth.getCurrentUser();
+        // Wait for Supabase to restore session (20 second timeout for slow networks)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session check timeout')), 20000)
+        );
+
+        let authUser;
+        try {
+          authUser = await Promise.race([db.auth.getCurrentUser(), timeoutPromise]) as any;
+        } catch (timeoutError) {
+          console.warn('Session check timed out after 20 seconds, showing login');
+          clearInterval(countdownInterval);
+          setLoading(false);
+          return;
+        }
 
         console.log('Auth user:', authUser ? 'Found' : 'Not found');
 
