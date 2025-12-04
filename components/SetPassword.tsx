@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
-import { db } from '../services/supabaseDb';
+import { supabase } from '../services/supabase';
 
 const SetPassword: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -13,14 +13,35 @@ const SetPassword: React.FC = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [tokenError, setTokenError] = useState(false);
 
     // Get email from URL params (sent in invitation email)
     const email = searchParams.get('email') || '';
     const role = searchParams.get('role') || '';
 
+    // Check for auth session on mount
+    useEffect(() => {
+        const checkSession = async () => {
+            const { data: { session }, error } = await supabase.auth.getSession();
+
+            if (error || !session) {
+                console.error('No active session found:', error);
+                setTokenError(true);
+                setError('Your invitation link has expired. Please request a new invitation from the administrator.');
+            }
+        };
+
+        checkSession();
+    }, []);
+
     const handleSetPassword = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (tokenError) {
+            setError('Your invitation link has expired. Please request a new invitation.');
+            return;
+        }
 
         // Validation
         if (password.length < 8) {
@@ -37,15 +58,26 @@ const SetPassword: React.FC = () => {
 
         try {
             // Update password using Supabase
-            await db.auth.updatePassword(password);
+            const { error: updateError } = await supabase.auth.updateUser({
+                password: password
+            });
 
-            console.log('Password set for:', email);
+            if (updateError) {
+                throw updateError;
+            }
+
+            console.log('Password set successfully for:', email);
 
             // Redirect to dashboard (user is already logged in via invite link)
             navigate('/');
         } catch (err: any) {
             console.error('Error setting password:', err);
-            setError(err.message || 'Failed to set password');
+            if (err.message?.includes('session') || err.message?.includes('token')) {
+                setError('Your invitation link has expired. Please request a new invitation from the administrator.');
+                setTokenError(true);
+            } else {
+                setError(err.message || 'Failed to set password');
+            }
         } finally {
             setLoading(false);
         }
