@@ -50,7 +50,10 @@ function App() {
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
 
   // Admin State
-  const [adminView, setAdminView] = useState<AdminView>('DASH');
+  const [adminView, setAdminView] = useState<AdminView>(() => {
+    const saved = localStorage.getItem('admin_last_view') as AdminView;
+    return saved || 'DASH';
+  });
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
