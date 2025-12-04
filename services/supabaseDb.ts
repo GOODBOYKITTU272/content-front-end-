@@ -12,153 +12,171 @@ import {
 } from '../types';
 
 // ============================================================================
-if (error) throw error;
+// AUTHENTICATION
+// ============================================================================
 
-// Update last login
-if (data.user) {
-    await supabase
-        .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('email', email);
-}
+export const auth = {
+    // Sign in with email/password
+    async signIn(email: string, password: string) {
+        // Clear any stale sessions before login
+        try {
+            await supabase.auth.signOut({ scope: 'local' });
+        } catch (e) {
+            // Ignore signOut errors, continue with login
+        }
 
-return data;
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error) throw error;
+
+        // Update last login
+        if (data.user) {
+            await supabase
+                .from('users')
+                .update({ last_login: new Date().toISOString() })
+                .eq('email', email);
+        }
+
+        return data;
     },
 
     // Sign out
     async signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-},
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+    },
 
     // Get current session user
     async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-},
+        const { data: { user } } = await supabase.auth.getUser();
+        return user;
+    },
 
     // Send password reset email
     async resetPassword(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/set-password`,
-    });
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/set-password`,
+        });
 
-    if (error) throw error;
-},
+        if (error) throw error;
+    },
 
     // Update password
     async updatePassword(newPassword: string) {
-    const { error } = await supabase.auth.updateUser({
-        password: newPassword
-    });
+        const { error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
 
-    if (error) throw error;
-},
+        if (error) throw error;
+    },
 
     // Invite user by email (Admin only) - Calls secure Edge Function
     async inviteUser(email: string, userData: { full_name: string; role: Role; phone?: string }) {
-    console.log('inviteUser called with:', email, userData);
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
-
-    try {
-        // Get current session token for authentication
-        console.log('Getting session...');
-        let session = null;
-        let sessionError = null;
-
-        // Helper to race a promise against a timeout
-        const withTimeout = (promise: Promise<any>, ms: number, name: string) => {
-            return Promise.race([
-                promise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms))
-            ]);
-        };
+        console.log('inviteUser called with:', email, userData);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
 
         try {
-            // 1. Try getSession with 10s timeout
-            const sessionResult: any = await withTimeout(
-                supabase.auth.getSession(),
-                10000,
-                'getSession'
-            );
+            // Get current session token for authentication
+            console.log('Getting session...');
+            let session = null;
+            let sessionError = null;
 
-            session = sessionResult.data.session;
-            sessionError = sessionResult.error;
-            console.log('getSession() result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
-        } catch (getSessionErr: any) {
-            console.warn('getSession() failed or timed out:', getSessionErr.message);
+            // Helper to race a promise against a timeout
+            const withTimeout = (promise: Promise<any>, ms: number, name: string) => {
+                return Promise.race([
+                    promise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms))
+                ]);
+            };
 
-            // 2. Fallback: try refreshSession() with 10s timeout
             try {
-                console.log('Attempting refreshSession()...');
-                const refreshResult: any = await withTimeout(
-                    supabase.auth.refreshSession(),
+                // 1. Try getSession with 10s timeout
+                const sessionResult: any = await withTimeout(
+                    supabase.auth.getSession(),
                     10000,
-                    'refreshSession'
+                    'getSession'
                 );
 
-                const { data, error: refreshError } = refreshResult;
+                session = sessionResult.data.session;
+                sessionError = sessionResult.error;
+                console.log('getSession() result:', session ? 'Found' : 'Not found', 'Error:', sessionError);
+            } catch (getSessionErr: any) {
+                console.warn('getSession() failed or timed out:', getSessionErr.message);
 
-                if (data.session && !refreshError) {
-                    console.log('refreshSession() succeeded');
-                    session = data.session;
-                } else {
-                    console.warn('refreshSession() returned no session or error:', refreshError);
-                    // 3. Last resort: getUser() check (just for debugging)
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (user) {
-                        console.log('getUser() found user, but we have no session token. Edge Function call will likely fail.');
+                // 2. Fallback: try refreshSession() with 10s timeout
+                try {
+                    console.log('Attempting refreshSession()...');
+                    const refreshResult: any = await withTimeout(
+                        supabase.auth.refreshSession(),
+                        10000,
+                        'refreshSession'
+                    );
+
+                    const { data, error: refreshError } = refreshResult;
+
+                    if (data.session && !refreshError) {
+                        console.log('refreshSession() succeeded');
+                        session = data.session;
+                    } else {
+                        console.warn('refreshSession() returned no session or error:', refreshError);
+                        // 3. Last resort: getUser() check (just for debugging)
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                            console.log('getUser() found user, but we have no session token. Edge Function call will likely fail.');
+                        }
                     }
+                } catch (refreshErr: any) {
+                    console.error('refreshSession() failed or timed out:', refreshErr.message);
                 }
-            } catch (refreshErr: any) {
-                console.error('refreshSession() failed or timed out:', refreshErr.message);
             }
-        }
 
-        if (sessionError) {
-            throw new Error(`Session error: ${sessionError.message}`);
-        }
-
-        if (!session) {
-            throw new Error('Unable to retrieve active session. Please check your connection or try logging in again.');
-        }
-
-        console.log('Session token found, calling Edge Function...');
-
-        // Call the Edge Function (service key is secure on server)
-        console.log('Calling Edge Function at:', `${supabaseUrl}/functions/v1/invite-user`);
-        const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email, userData })
-        });
-
-        console.log('Edge Function response status:', response.status);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Edge Function error response:', errorText);
-            let errorMessage;
-            try {
-                const errorJson = JSON.parse(errorText);
-                errorMessage = errorJson.error || 'Failed to invite user';
-            } catch {
-                errorMessage = errorText || 'Failed to invite user';
+            if (sessionError) {
+                throw new Error(`Session error: ${sessionError.message}`);
             }
-            throw new Error(errorMessage);
-        }
 
-        const data = await response.json();
-        console.log('Edge Function success:', data);
-        return data.user;
-    } catch (error: any) {
-        console.error('inviteUser error:', error);
-        throw error;
+            if (!session) {
+                throw new Error('Unable to retrieve active session. Please check your connection or try logging in again.');
+            }
+
+            console.log('Session token found, calling Edge Function...');
+
+            // Call the Edge Function (service key is secure on server)
+            console.log('Calling Edge Function at:', `${supabaseUrl}/functions/v1/invite-user`);
+            const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, userData })
+            });
+
+            console.log('Edge Function response status:', response.status);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Edge Function error response:', errorText);
+                let errorMessage;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || 'Failed to invite user';
+                } catch {
+                    errorMessage = errorText || 'Failed to invite user';
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            console.log('Edge Function success:', data);
+            return data.user;
+        } catch (error: any) {
+            console.error('inviteUser error:', error);
+            throw error;
+        }
     }
-}
 };
 
 // ============================================================================
