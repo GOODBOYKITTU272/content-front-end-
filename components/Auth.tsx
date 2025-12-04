@@ -23,12 +23,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         try {
             if (email && password) {
-                // Time-box login to avoid hanging UI
+                // Time-box login to prevent hanging (30s timeout for slow networks)
                 const loginPromise = db.login(email, password);
                 const timed = Promise.race([
                     loginPromise,
                     new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error('Login request timed out. Please try again.')), 10000)
+                        setTimeout(() => reject(new Error('Login request timed out. Please try again.')), 30000)
                     )
                 ]);
 
