@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from './services/supabase';
@@ -57,9 +56,174 @@ function App() {
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
-  // Session restoration on mount - Simplified approach using only auth listener
+  // Function to check if token is expired
+  const isTokenExpired = (tokenData: any): boolean => {
+    try {
+      if (tokenData.expires_at) {
+        const now = Math.floor(Date.now() / 1000);
+        return now > tokenData.expires_at;
+      }
+      return false;
+    } catch (e) {
+      console.error('Error checking token expiration:', e);
+      return true; // Treat as expired if we can't check
+    }
+  };
+
+  // Function to clear invalid token
+  const clearInvalidToken = () => {
+    console.log('Clearing invalid/expired token');
+    // Clear all Supabase auth tokens
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Clear user session
+    setUser(null);
+    setLoading(false);
+  };
+
+  // Function to attempt session restoration with timeout and retry logic
+  const restoreSession = async (retryCount = 0, maxRetries = 3) => {
+    try {
+      console.log(`Attempting session restoration (attempt ${retryCount + 1}/${maxRetries + 1})`);
+      
+      // Check for expired token first
+      const tokenKeys = Object.keys(localStorage).filter(key => 
+        key.startsWith('sb-') && key.endsWith('-auth-token')
+      );
+      
+      for (const tokenKey of tokenKeys) {
+        const tokenItem = localStorage.getItem(tokenKey);
+        if (tokenItem) {
+          try {
+            const tokenData = JSON.parse(tokenItem);
+            if (isTokenExpired(tokenData)) {
+              console.log('Found expired token, clearing it');
+              localStorage.removeItem(tokenKey);
+            }
+          } catch (parseError) {
+            console.warn('Could not parse token, clearing it', parseError);
+            localStorage.removeItem(tokenKey);
+          }
+        }
+      }
+
+      // Attempt to get session with timeout
+      const getSessionWithTimeout = (timeoutMs: number) => {
+        return Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session request timeout')), timeoutMs)
+          )
+        ]);
+      };
+
+      // Try to get session with timeout
+      const sessionResult: any = await getSessionWithTimeout(15000); // 15 second timeout
+      
+      const { data: { session }, error: sessionError } = sessionResult;
+      
+      if (sessionError) {
+        console.warn('Session check error:', sessionError);
+        if (retryCount < maxRetries) {
+          console.log(`Retrying session restoration in ${1000 * (retryCount + 1)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return await restoreSession(retryCount + 1, maxRetries);
+        } else {
+          throw sessionError;
+        }
+      }
+
+      if (session?.user) {
+        try {
+          const fullUser = await db.users.getByEmail(session.user.email!);
+          if (fullUser) {
+            console.log('User authenticated and set:', fullUser.full_name);
+            setUser(fullUser);
+            await refreshData(fullUser);
+          } else {
+            console.warn('User not found in database for email:', session.user.email);
+          }
+        } catch (dbError) {
+          console.error('Error fetching user from database:', dbError);
+          if (retryCount < maxRetries) {
+            console.log(`Retrying database fetch in ${1000 * (retryCount + 1)}ms...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+            return await restoreSession(retryCount + 1, maxRetries);
+          } else {
+            throw dbError;
+          }
+        }
+      } else {
+        console.log('No active session found');
+      }
+    } catch (error: any) {
+      console.error('Session restoration failed:', error);
+      
+      // If it's a timeout or network error, clear the token
+      if (error.message?.includes('timeout') || error.message?.includes('network')) {
+        console.log('Network/timeout error detected, clearing token');
+        clearInvalidToken();
+        return;
+      }
+      
+      // For other errors, retry a few times
+      if (retryCount < maxRetries) {
+        console.log(`Retrying session restoration in ${1000 * (retryCount + 1)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return await restoreSession(retryCount + 1, maxRetries);
+      } else {
+        // After max retries, clear token and show login
+        console.log('Max retries reached, clearing token');
+        clearInvalidToken();
+        return;
+      }
+    }
+  };
+
+  // Session restoration on mount - Enhanced approach with timeout and error handling
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const initializeAuth = async () => {
+      if (!mounted) return;
+      
+      try {
+        console.log('Starting session initialization...');
+        
+        // Set a global timeout to prevent indefinite loading
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.log('Session initialization timeout, clearing token');
+            clearInvalidToken();
+          }
+        }, 20000); // 20 second timeout
+        
+        // Attempt session restoration
+        await restoreSession();
+        
+        // Clear timeout if successful
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (mounted) {
+          clearInvalidToken();
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          console.log('Session initialization complete');
+        }
+      }
+    };
 
     // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -105,9 +269,15 @@ function App() {
       }
     });
 
-    // Cleanup listener on unmount
+    // Initialize auth
+    initializeAuth();
+
+    // Cleanup listener and timeout on unmount
     return () => {
       mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
       }
