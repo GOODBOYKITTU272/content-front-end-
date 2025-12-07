@@ -28,25 +28,39 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
             if (formData.sendEmail) {
                 console.log('Calling inviteUser function...');
                 // Use invite function to create user AND send email
+                // Fix: Convert empty phone string to null
+                const phoneValue = formData.phone && formData.phone.trim() !== '' ? formData.phone : null;
+                
                 const result = await db.auth.inviteUser(formData.email, {
                     full_name: formData.full_name,
                     role: formData.role,
-                    phone: formData.phone
+                    phone: phoneValue
                 });
                 console.log('Invite result:', result);
                 
-                if (result?.id) {
-                    alert(`User ${formData.full_name} created successfully! Invitation email sent.`);
+                // Handle both success and warning cases
+                if (result?.user?.id) {
+                    if (result.warning) {
+                        alert(`User ${formData.full_name} invited successfully! However, there was a warning: ${result.warning}`);
+                    } else {
+                        alert(`User ${formData.full_name} created successfully! Invitation email sent.`);
+                    }
+                } else if (result?.success) {
+                    // Handle case where user already existed
+                    alert(`User ${formData.full_name} already existed and was updated successfully!`);
                 } else {
                     alert(`User ${formData.full_name} created successfully! User created directly without email invitation.`);
                 }
             } else {
                 console.log('Creating user without email...');
                 // Just create database record without email
+                // Fix: Convert empty phone string to null
+                const phoneValue = formData.phone && formData.phone.trim() !== '' ? formData.phone : null;
+                
                 await db.addUser({
                     full_name: formData.full_name,
                     email: formData.email,
-                    phone: formData.phone,
+                    phone: phoneValue,
                     role: formData.role,
                     status: formData.status
                 });

@@ -174,7 +174,16 @@ serve(async (req) => {
 
         if (dbError) {
             console.error('Failed to create user record:', dbError)
-            // Don't throw here, as the invite was successful
+            // Even if database upsert fails, we should still return success since the invite was successful
+            // But we'll log the error for debugging
+            return new Response(
+                JSON.stringify({ 
+                    success: true, 
+                    user: data.user,
+                    warning: 'User invited successfully but failed to create database record: ' + dbError.message 
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
         }
 
         return new Response(

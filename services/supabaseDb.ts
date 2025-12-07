@@ -189,7 +189,9 @@ export const auth = {
 
             const data = await response.json();
             console.log('Edge Function success:', data);
-            return data.user;
+            
+            // Return the full response data, not just the user
+            return data;
         } catch (error: any) {
             console.error('inviteUser error:', error);
             throw error;
