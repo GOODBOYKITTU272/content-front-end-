@@ -45,10 +45,10 @@ import ObserverDashboard from './components/observer/ObserverDashboard';
 function App() {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-
+  
   // Admin State
   const [adminView, setAdminView] = useState<AdminView>(() => {
     const saved = localStorage.getItem('admin_last_view') as AdminView;
@@ -61,30 +61,120 @@ function App() {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Starting session initialization...');
+        
+        // First check if there's a session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.warn('Session check error:', sessionError);
+        }
 
         if (session) {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-
-          if (authUser && authUser.email) {
-            const fullUser = await db.users.getByEmail(authUser.email);
-
-            if (fullUser) {
-              setUser(fullUser);
-              await refreshData(fullUser);
+          console.log('Active session found, fetching user data...');
+          try {
+            const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+            
+            if (userError) {
+              console.warn('Get user error:', userError);
             }
+
+            if (authUser && authUser.email) {
+              try {
+                const fullUser = await db.users.getByEmail(authUser.email);
+                
+                if (fullUser) {
+                  console.log('User authenticated and set:', fullUser.full_name);
+                  setUser(fullUser);
+                  await refreshData(fullUser);
+                } else {
+                  console.warn('User not found in database for email:', authUser.email);
+                }
+              } catch (dbError) {
+                console.warn('Database user fetch error:', dbError);
+              }
+            }
+          } catch (authError) {
+            console.warn('Auth user fetch error:', authError);
           }
+        } else {
+          console.log('No active session found');
         }
       } catch (error) {
         console.error('Session restoration failed:', error);
-        await supabase.auth.signOut();
       } finally {
         setLoading(false);
+        console.log('Session initialization complete');
       }
     };
 
     initializeAuth();
+    
+    // Also listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      
+      switch (event) {
+        case 'SIGNED_IN':
+          if (session?.user) {
+            try {
+              const fullUser = await db.users.getByEmail(session.user.email!);
+              if (fullUser) {
+                console.log('User signed in:', fullUser.full_name);
+                setUser(fullUser);
+                await refreshData(fullUser);
+              }
+            } catch (error) {
+              console.error('Error fetching user on sign in:', error);
+            }
+          }
+          break;
+          
+        case 'SIGNED_OUT':
+          console.log('User signed out');
+          setUser(null);
+          setProjects([]);
+          setAdminUsers([]);
+          setAdminLogs([]);
+          setAdminView('DASH');
+          localStorage.removeItem('admin_last_view');
+          break;
+          
+        case 'TOKEN_REFRESHED':
+          console.log('Token refreshed, refreshing session cache');
+          // Refresh our user cache when token is refreshed
+          await db.refreshSession();
+          break;
+      }
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, []);
+
+  // Periodic session check to maintain session state
+  useEffect(() => {
+    if (!user) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        // Check if session is still valid
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.log('Session expired, triggering sign out');
+          setUser(null);
+        }
+      } catch (error) {
+        console.warn('Periodic session check failed:', error);
+      }
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Save admin view to localStorage when it changes
   useEffect(() => {
@@ -96,24 +186,28 @@ function App() {
   const refreshData = async (u: User = user!) => {
     if (!u) return;
 
-    if (u.role === Role.ADMIN) {
-      const users = await db.getUsers();
-      setAdminUsers([...users]);
-      const logs = await db.getSystemLogs();
-      setAdminLogs([...logs]);
-    } else {
-      const userProjects = await db.getProjects(u);
-      setProjects([...userProjects]);
+    try {
+      if (u.role === Role.ADMIN) {
+        const users = await db.getUsers();
+        setAdminUsers([...users]);
+        const logs = await db.getSystemLogs();
+        setAdminLogs([...logs]);
+      } else {
+        const userProjects = await db.getProjects(u);
+        setProjects([...userProjects]);
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
     }
   };
 
   const handleLogin = async () => {
     try {
       const authUser = await db.auth.getCurrentUser();
-
+      
       if (authUser && authUser.email) {
         const fullUser = await db.users.getByEmail(authUser.email);
-
+        
         if (fullUser) {
           setUser(fullUser);
           await refreshData(fullUser);
@@ -142,6 +236,18 @@ function App() {
     await db.createProject(title, channel, dueDate);
     refreshData(user!);
   };
+
+  // Show loading state while initializing
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-slate-300 border-t-slate-900 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle Set Password Route
   if (location.pathname === '/set-password') {

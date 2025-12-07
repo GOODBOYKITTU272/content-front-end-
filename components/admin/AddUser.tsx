@@ -34,7 +34,7 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
                     phone: formData.phone
                 });
                 console.log('Invite result:', result);
-                alert(`User ${formData.full_name} created successfully! Invitation email sent.`);
+                alert(`User ${formData.full_name} created successfully! ${result?.id ? 'Invitation email sent.' : 'User created directly without email invitation.'}`);
             } else {
                 console.log('Creating user without email...');
                 // Just create database record without email

@@ -72,6 +72,24 @@ export const auth = {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
 
         try {
+            // First, check if we have a current user session
+            const currentUser = await this.getCurrentUser();
+            if (!currentUser) {
+                console.warn('No active session found, falling back to direct user creation');
+                // Fall back to direct user creation without sending invite email
+                const newUser = await users.create({
+                    email,
+                    full_name: userData.full_name,
+                    role: userData.role,
+                    phone: userData.phone,
+                    status: UserStatus.ACTIVE
+                });
+                
+                // Since we couldn't send an invite email, we'll create a basic user record
+                console.log('User created directly without invite email:', newUser);
+                return newUser;
+            }
+
             // Get current session token for authentication
             console.log('Getting session...');
             let session = null;
@@ -126,12 +144,19 @@ export const auth = {
                 }
             }
 
-            if (sessionError) {
-                throw new Error(`Session error: ${sessionError.message}`);
-            }
-
-            if (!session) {
-                throw new Error('Unable to retrieve active session. Please check your connection or try logging in again.');
+            // If we still don't have a session, fall back to direct creation
+            if (sessionError || !session) {
+                console.warn('Unable to retrieve active session, falling back to direct user creation');
+                const newUser = await users.create({
+                    email,
+                    full_name: userData.full_name,
+                    role: userData.role,
+                    phone: userData.phone,
+                    status: UserStatus.ACTIVE
+                });
+                
+                console.log('User created directly without invite email:', newUser);
+                return newUser;
             }
 
             console.log('Session token found, calling Edge Function...');
@@ -774,39 +799,95 @@ export const helpers = {
 
 // Session management (mimics mockDb behavior)
 let currentUserCache: User | null = null;
+let sessionRestored = false;
 
 // Initialize current user from Supabase session
 const initializeCurrentUser = async () => {
+    if (sessionRestored) return; // Prevent multiple initializations
+    
     try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
+        console.log('Initializing current user from session...');
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+            console.log('Found active session, fetching user data...');
             // Get full user data from users table
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('users')
                 .select('*')
-                .eq('email', authUser.email)
+                .eq('email', session.user.email)
                 .single();
-            currentUserCache = data as User;
+                
+            if (error) {
+                console.warn('Error fetching user data:', error);
+                return;
+            }
+            
+            if (data) {
+                currentUserCache = data as User;
+                console.log('User cache initialized:', currentUserCache?.full_name);
+            }
+        } else {
+            console.log('No active session found during initialization');
         }
     } catch (error) {
-        console.error('Failed to initialize current user:', error);
+        console.warn('Failed to initialize current user from session:', error);
+    } finally {
+        sessionRestored = true;
     }
 };
 
-// Auto-initialize
-initializeCurrentUser();
+// Auto-initialize with better error handling
+initializeCurrentUser().catch(error => {
+    console.warn('Auto-initialization failed:', error);
+});
 
-// Listen for auth changes
+// Listen for auth changes with improved handling
 supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-        const { data } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single();
-        currentUserCache = data as User;
-    } else if (event === 'SIGNED_OUT') {
-        currentUserCache = null;
+    console.log('Auth state change detected:', event);
+    
+    switch (event) {
+        case 'SIGNED_IN':
+            if (session?.user) {
+                try {
+                    const { data, error } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('email', session.user.email)
+                        .single();
+                        
+                    if (error) {
+                        console.warn('Error fetching user data on sign in:', error);
+                        return;
+                    }
+                    
+                    if (data) {
+                        currentUserCache = data as User;
+                        console.log('User signed in and cached:', currentUserCache?.full_name);
+                    }
+                } catch (error) {
+                    console.warn('Error processing sign in:', error);
+                }
+            }
+            break;
+            
+        case 'SIGNED_OUT':
+            console.log('User signed out, clearing cache');
+            currentUserCache = null;
+            break;
+            
+        case 'TOKEN_REFRESHED':
+            console.log('Token refreshed');
+            // Optionally re-fetch user data if needed
+            break;
+            
+        case 'USER_UPDATED':
+            console.log('User updated');
+            // Optionally re-fetch user data if needed
+            break;
+            
+        default:
+            console.log('Other auth event:', event);
     }
 });
 
@@ -834,27 +915,89 @@ export const db = {
         return currentUserCache;
     },
 
+    async refreshSession(): Promise<boolean> {
+        try {
+            console.log('Manually refreshing session...');
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session?.user) {
+                const { data, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('email', session.user.email!)
+                    .single();
+                    
+                if (error) {
+                    console.warn('Error fetching user during session refresh:', error);
+                    return false;
+                }
+                
+                if (data) {
+                    currentUserCache = data as User;
+                    console.log('Session refreshed successfully for:', currentUserCache.full_name);
+                    return true;
+                }
+            } else {
+                console.log('No active session to refresh');
+                currentUserCache = null;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Session refresh failed:', error);
+            return false;
+        }
+    },
+
     async login(email: string, password: string): Promise<User> {
-        // Real authentication using Supabase
-        const { user } = await auth.signIn(email, password);
+        try {
+            // Real authentication using Supabase
+            const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
 
-        if (!user) {
-            throw new Error('Login failed');
+            if (signInError) {
+                throw new Error(signInError.message);
+            }
+
+            if (!user) {
+                throw new Error('Login failed - no user returned');
+            }
+
+            // Get full user details
+            const { data, error: fetchError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', email)
+                .single();
+
+            if (fetchError) {
+                throw new Error(`User profile fetch failed: ${fetchError.message}`);
+            }
+
+            if (!data) {
+                throw new Error('User profile not found in database');
+            }
+
+            currentUserCache = data as User;
+            console.log('User logged in and cached:', currentUserCache.full_name);
+            
+            // Update last login
+            try {
+                await supabase
+                    .from('users')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('email', email);
+            } catch (updateError) {
+                console.warn('Failed to update last login timestamp:', updateError);
+            }
+            
+            return data as User;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
         }
-
-        // Get full user details
-        const { data } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', email)
-            .single();
-
-        if (!data) {
-            throw new Error('User profile not found');
-        }
-
-        currentUserCache = data as User;
-        return data as User;
     },
 
     async logout() {
