@@ -34,7 +34,12 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
                     phone: formData.phone
                 });
                 console.log('Invite result:', result);
-                alert(`User ${formData.full_name} created successfully! ${result?.id ? 'Invitation email sent.' : 'User created directly without email invitation.'}`);
+                
+                if (result?.id) {
+                    alert(`User ${formData.full_name} created successfully! Invitation email sent.`);
+                } else {
+                    alert(`User ${formData.full_name} created successfully! User created directly without email invitation.`);
+                }
             } else {
                 console.log('Creating user without email...');
                 // Just create database record without email
@@ -51,7 +56,23 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
             onUserAdded();
         } catch (error: any) {
             console.error('Error creating user:', error);
-            alert(`Error: ${error.message || 'Unknown error occurred'}`);
+            
+            // Provide more specific error messages
+            let errorMessage = 'Unknown error occurred';
+            if (error.message) {
+                errorMessage = error.message;
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+            }
+            
+            // Check for common Supabase errors
+            if (errorMessage.includes('duplicate key value violates unique constraint')) {
+                alert('Error: A user with this email already exists!');
+            } else if (errorMessage.includes('Invalid email')) {
+                alert('Error: Please enter a valid email address.');
+            } else {
+                alert(`Error creating user: ${errorMessage}`);
+            }
         }
     };
 

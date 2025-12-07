@@ -245,27 +245,39 @@ export const users = {
         phone?: string;
         status?: UserStatus;
     }) {
-        const { data, error } = await supabase
-            .from('users')
-            .insert([{
-                ...userData,
-                status: userData.status || 'ACTIVE'
-            }])
-            .select()
-            .single();
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .insert([{
+                    ...userData,
+                    status: userData.status || UserStatus.ACTIVE
+                }])
+                .select()
+                .single();
 
-        if (error) throw error;
+            if (error) {
+                console.error('Error creating user in database:', error);
+                throw error;
+            }
 
-        // Log user creation
-        await systemLogs.add({
-            actor_id: data.id,
-            actor_name: userData.full_name,
-            actor_role: userData.role,
-            action: 'USER_CREATED',
-            details: `User ${userData.full_name} created with role ${userData.role}`
-        });
+            // Log user creation
+            try {
+                await systemLogs.add({
+                    actor_id: data.id,
+                    actor_name: userData.full_name,
+                    actor_role: userData.role,
+                    action: 'USER_CREATED',
+                    details: `User ${userData.full_name} created with role ${userData.role}`
+                });
+            } catch (logError) {
+                console.warn('Failed to log user creation:', logError);
+            }
 
-        return data as User;
+            return data as User;
+        } catch (error) {
+            console.error('Failed to create user:', error);
+            throw error;
+        }
     },
 
     // Update user

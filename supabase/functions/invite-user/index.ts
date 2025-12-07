@@ -69,7 +69,7 @@ serve(async (req) => {
                 full_name: userData.full_name,
                 role: userData.role,
                 phone: userData.phone || null,
-                status: 'ACTIVE'
+                status: 'ACTIVE'  // This is fine as a string in the database
             })
 
         if (dbError) {
@@ -82,8 +82,9 @@ serve(async (req) => {
         )
 
     } catch (error) {
+        console.error('Edge Function error:', error)
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: error.message || 'Internal server error' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
     }

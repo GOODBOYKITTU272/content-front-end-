@@ -59,12 +59,25 @@ function App() {
 
   // Session restoration on mount
   useEffect(() => {
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, name: string) => {
+      return Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms)
+        )
+      ]);
+    };
+
     const initializeAuth = async () => {
       try {
         console.log('Starting session initialization...');
         
         // First check if there's a session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await withTimeout(
+          supabase.auth.getSession(),
+          10000,
+          'getSession'
+        );
         
         if (sessionError) {
           console.warn('Session check error:', sessionError);
@@ -73,7 +86,11 @@ function App() {
         if (session) {
           console.log('Active session found, fetching user data...');
           try {
-            const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+            const { data: { user: authUser }, error: userError } = await withTimeout(
+              supabase.auth.getUser(),
+              10000,
+              'getUser'
+            );
             
             if (userError) {
               console.warn('Get user error:', userError);
@@ -81,7 +98,11 @@ function App() {
 
             if (authUser && authUser.email) {
               try {
-                const fullUser = await db.users.getByEmail(authUser.email);
+                const fullUser = await withTimeout(
+                  db.users.getByEmail(authUser.email),
+                  10000,
+                  'getByEmail'
+                );
                 
                 if (fullUser) {
                   console.log('User authenticated and set:', fullUser.full_name);
