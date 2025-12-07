@@ -184,7 +184,22 @@ export const auth = {
                 } catch {
                     errorMessage = errorText || 'Failed to invite user';
                 }
-                throw new Error(errorMessage);
+
+                // Fallback: create user directly so the admin can proceed even if the edge function fails
+                console.warn('Invite failed, falling back to direct user creation. No email will be sent.');
+                const createdUser = await users.create({
+                    email,
+                    full_name: userData.full_name,
+                    role: userData.role,
+                    phone: userData.phone,
+                    status: UserStatus.ACTIVE
+                });
+
+                return {
+                    user: createdUser,
+                    fallback: true,
+                    warning: `Invite email not sent: ${errorMessage}`
+                };
             }
 
             const data = await response.json();

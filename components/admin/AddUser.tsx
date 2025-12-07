@@ -40,7 +40,9 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
                 
                 // Handle both success and warning cases
                 if (result?.user?.id) {
-                    if (result.warning) {
+                    if (result.fallback) {
+                        alert(`User ${formData.full_name} created successfully, but the invite email was NOT sent. ${result.warning || ''}`.trim());
+                    } else if (result.warning) {
                         alert(`User ${formData.full_name} invited successfully! However, there was a warning: ${result.warning}`);
                     } else {
                         alert(`User ${formData.full_name} created successfully! Invitation email sent.`);
