@@ -8,11 +8,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Missing Supabase environment variables!');
 }
 
+// Custom fetch with timeout and logging for better debugging
+const customFetch = (url: string, options: RequestInit = {}) => {
+    const timeout = 30000; // 30 seconds timeout
+    
+    return Promise.race([
+        fetch(url, options),
+        new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`Request timed out after ${timeout}ms. Please check your network connection.`)), timeout)
+        )
+    ]);
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
         storage: window.localStorage
+    },
+    global: {
+        fetch: customFetch
     }
 });

@@ -23,21 +23,26 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         try {
             if (email && password) {
-                // Time-box login to prevent hanging (30s timeout for slow networks)
-                const loginPromise = db.login(email, password);
-                const timed = Promise.race([
-                    loginPromise,
-                    new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error('Login request timed out. Please try again.')), 30000)
-                    )
-                ]);
-
-                await timed;
+                // Let the db.login handle the authentication without additional timeout
+                // The Supabase client now has its own timeout handling
+                await db.login(email, password);
                 onLogin();
             }
         } catch (err: any) {
             console.error('Login failed:', err);
-            setError(err.message || 'Failed to login. Please check your credentials.');
+            
+            // Provide more specific error messages
+            let errorMessage = err.message || 'Failed to login. Please check your credentials.';
+            
+            if (errorMessage.includes('timeout')) {
+                errorMessage = 'Login request timed out. Please check your network connection and try again.';
+            } else if (errorMessage.includes('Invalid login credentials')) {
+                errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+            } else if (errorMessage.includes('Email not confirmed')) {
+                errorMessage = 'Email not confirmed. Please check your email for confirmation link.';
+            }
+            
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
