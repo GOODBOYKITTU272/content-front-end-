@@ -11,7 +11,7 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
-    
+
     if (req.method !== 'POST') {
         return new Response(
             JSON.stringify({ error: 'Method not allowed. Use POST.' }),
@@ -55,7 +55,7 @@ serve(async (req) => {
         }
 
         // Validate role against allowed values
-        const allowedRoles = ['ADMIN', 'WRITER', 'CINE', 'EDITOR', 'DESIGNER', 'CMO', 'CEO', 'OPS']
+        const allowedRoles = ['ADMIN', 'WRITER', 'CINE', 'EDITOR', 'DESIGNER', 'CMO', 'CEO', 'OPS', 'OBSERVER']
         if (!allowedRoles.includes(userData.role)) {
             return new Response(
                 JSON.stringify({ error: `Invalid role. Allowed roles: ${allowedRoles.join(', ')}` }),
@@ -79,7 +79,7 @@ serve(async (req) => {
         // Handle case where user already exists
         if (error) {
             console.error('Supabase Invite Error:', error)
-            
+
             // Check if it's a user already exists error
             if (error.message && error.message.includes('already')) {
                 // User already exists, try to get the existing user
@@ -89,30 +89,30 @@ serve(async (req) => {
                         page: 1,
                         perPage: 1000
                     })
-                    
+
                     if (listError) {
                         console.error('Error listing users:', listError)
                         throw error // Re-throw original error
                     }
-                    
+
                     const existingUser = userList?.users?.find(u => u.email === email)
-                    
+
                     if (existingUser) {
                         // Update the existing user's metadata
                         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
                             existingUser.id,
-                            { 
+                            {
                                 user_metadata: {
                                     ...existingUser.user_metadata,
                                     ...userData
                                 }
                             }
                         )
-                        
+
                         if (updateError) {
                             console.error('Error updating existing user metadata:', updateError)
                         }
-                        
+
                         // Upsert the user record in the public.users table
                         const { error: dbError } = await supabaseAdmin
                             .from('users')
@@ -131,14 +131,14 @@ serve(async (req) => {
                             console.error('Failed to update user record:', dbError)
                             throw new Error(`Failed to update existing user record: ${dbError.message}`)
                         }
-                        
+
                         console.log('Existing user updated successfully:', existingUser.id)
-                        
+
                         return new Response(
-                            JSON.stringify({ 
-                                success: true, 
-                                message: 'User already existed, updated successfully', 
-                                user: existingUser 
+                            JSON.stringify({
+                                success: true,
+                                message: 'User already existed, updated successfully',
+                                user: existingUser
                             }),
                             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                         )
@@ -177,10 +177,10 @@ serve(async (req) => {
             // Even if database upsert fails, we should still return success since the invite was successful
             // But we'll log the error for debugging
             return new Response(
-                JSON.stringify({ 
-                    success: true, 
+                JSON.stringify({
+                    success: true,
                     user: data.user,
-                    warning: 'User invited successfully but failed to create database record: ' + dbError.message 
+                    warning: 'User invited successfully but failed to create database record: ' + dbError.message
                 }),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )

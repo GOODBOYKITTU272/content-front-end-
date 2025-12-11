@@ -44,10 +44,12 @@ import ObserverDashboard from './components/observer/ObserverDashboard';
 function App() {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // Start with loading true
+  const [loading, setLoading] = useState(true);
+  const [isRestoringSession, setIsRestoringSession] = useState(true); // NEW: Track session restoration
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-  
+  const [showReloadConfirm, setShowReloadConfirm] = useState(false); // Custom reload modal
+
   // Admin State
   const [adminView, setAdminView] = useState<AdminView>(() => {
     const saved = localStorage.getItem('admin_last_view') as AdminView;
@@ -70,226 +72,175 @@ function App() {
     }
   };
 
-  // Function to clear invalid token
-  const clearInvalidToken = () => {
-    console.log('Clearing invalid/expired token');
-    // Clear all Supabase auth tokens
+  // Function to clear all stored auth tokens
+  const clearAllTokens = () => {
+    console.log('Clearing all auth tokens');
     Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+      if (key.startsWith('sb-')) {
         localStorage.removeItem(key);
       }
     });
-    // Clear user session
+  };
+
+  // Function to clear invalid token and reset state
+  const clearInvalidToken = () => {
+    console.log('Clearing invalid/expired token');
+    clearAllTokens();
     setUser(null);
     setLoading(false);
   };
 
-  // Function to attempt session restoration with timeout and retry logic
-  const restoreSession = async (retryCount = 0, maxRetries = 3) => {
+  // Simplified session restoration with proper error handling
+  const restoreSession = async () => {
     try {
-      console.log(`Attempting session restoration (attempt ${retryCount + 1}/${maxRetries + 1})`);
-      
-      // Check for expired token first
-      const tokenKeys = Object.keys(localStorage).filter(key => 
-        key.startsWith('sb-') && key.endsWith('-auth-token')
-      );
-      
-      for (const tokenKey of tokenKeys) {
-        const tokenItem = localStorage.getItem(tokenKey);
-        if (tokenItem) {
-          try {
-            const tokenData = JSON.parse(tokenItem);
-            if (isTokenExpired(tokenData)) {
-              console.log('Found expired token, clearing it');
-              localStorage.removeItem(tokenKey);
-            }
-          } catch (parseError) {
-            console.warn('Could not parse token, clearing it', parseError);
-            localStorage.removeItem(tokenKey);
-          }
-        }
-      }
+      console.log('Attempting session restoration...');
 
-      // Attempt to get session with timeout
-      const getSessionWithTimeout = (timeoutMs: number) => {
-        return Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Session request timeout')), timeoutMs)
-          )
-        ]);
-      };
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      // Try to get session with timeout
-      const sessionResult: any = await getSessionWithTimeout(15000); // 15 second timeout
-      
-      const { data: { session }, error: sessionError } = sessionResult;
-      
       if (sessionError) {
         console.warn('Session check error:', sessionError);
-        if (retryCount < maxRetries) {
-          console.log(`Retrying session restoration in ${1000 * (retryCount + 1)}ms...`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return await restoreSession(retryCount + 1, maxRetries);
-        } else {
-          throw sessionError;
-        }
+        clearAllTokens();
+        return;
       }
 
       if (session?.user) {
         try {
           const fullUser = await db.users.getByEmail(session.user.email!);
           if (fullUser) {
-            console.log('User authenticated and set:', fullUser.full_name);
+            console.log('Session restored for:', fullUser.full_name);
             setUser(fullUser);
             await refreshData(fullUser);
           } else {
             console.warn('User not found in database for email:', session.user.email);
+            await supabase.auth.signOut();
+            clearAllTokens();
           }
         } catch (dbError) {
           console.error('Error fetching user from database:', dbError);
-          if (retryCount < maxRetries) {
-            console.log(`Retrying database fetch in ${1000 * (retryCount + 1)}ms...`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-            return await restoreSession(retryCount + 1, maxRetries);
-          } else {
-            throw dbError;
-          }
+          clearAllTokens();
         }
       } else {
         console.log('No active session found');
       }
     } catch (error: any) {
       console.error('Session restoration failed:', error);
-      
-      // If it's a timeout or network error, clear the token
-      if (error.message?.includes('timeout') || error.message?.includes('network')) {
-        console.log('Network/timeout error detected, clearing token');
-        clearInvalidToken();
-        return;
-      }
-      
-      // For other errors, retry a few times
-      if (retryCount < maxRetries) {
-        console.log(`Retrying session restoration in ${1000 * (retryCount + 1)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return await restoreSession(retryCount + 1, maxRetries);
-      } else {
-        // After max retries, clear token and show login
-        console.log('Max retries reached, clearing token');
-        clearInvalidToken();
-        return;
-      }
+      clearAllTokens();
     }
   };
 
-  // Session restoration on mount - Enhanced approach with timeout and error handling
+  // Session restoration on mount - Simplified with guaranteed state update
   useEffect(() => {
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
+    let fallbackTimer: ReturnType<typeof setTimeout>;
 
     const initializeAuth = async () => {
       if (!mounted) return;
-      
+
       try {
         console.log('Starting session initialization...');
-        
-        // Set a global timeout to prevent indefinite loading
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.log('Session initialization timeout, clearing token');
-            clearInvalidToken();
-          }
-        }, 20000); // 20 second timeout
-        
-        // Attempt session restoration
         await restoreSession();
-        
-        // Clear timeout if successful
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
       } catch (error) {
         console.error('Initialization error:', error);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
         if (mounted) {
-          clearInvalidToken();
+          clearAllTokens();
         }
       } finally {
+        // ALWAYS set these, even on error
         if (mounted) {
           setLoading(false);
+          setIsRestoringSession(false);
           console.log('Session initialization complete');
         }
       }
     };
 
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session);
-      
-      if (!mounted) return;
+    // REMOVED: Global onAuthStateChange listener
+    // It was causing race conditions with manual login flow
+    // Auth state changes are now handled in SetPassword component only
 
-      switch (event) {
-        case 'SIGNED_IN':
-        case 'TOKEN_REFRESHED':
-          if (session?.user) {
-            try {
-              const fullUser = await db.users.getByEmail(session.user.email!);
-              if (fullUser && mounted) {
-                console.log('User authenticated and set:', fullUser.full_name);
-                setUser(fullUser);
-                await refreshData(fullUser);
-              }
-            } catch (error) {
-              console.error('Error fetching user on sign in:', error);
-            }
-          }
-          break;
-          
-        case 'SIGNED_OUT':
-          console.log('User signed out');
-          if (mounted) {
-            setUser(null);
-            setProjects([]);
-            setAdminUsers([]);
-            setAdminLogs([]);
-            setAdminView('DASH');
-            localStorage.removeItem('admin_last_view');
-          }
-          break;
-          
-        default:
-          break;
-      }
-      
-      if (mounted) {
-        setLoading(false);
-      }
+    // Start initialization with a safety timeout so UI never hangs on "Loading session..."
+    fallbackTimer = setTimeout(() => {
+      if (!mounted) return;
+      console.warn('Session initialization timed out; clearing tokens and returning to login.');
+      clearAllTokens();
+      setLoading(false);
+      setIsRestoringSession(false);
+    }, 8000);
+
+    initializeAuth().finally(() => {
+      clearTimeout(fallbackTimer);
     });
 
-    // Initialize auth
-    initializeAuth();
-
-    // Cleanup listener and timeout on unmount
     return () => {
       mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      if (authListener?.subscription) {
-        authListener.subscription.unsubscribe();
-      }
+      clearTimeout(fallbackTimer);
     };
   }, []);
-  
+
   // Save admin view to localStorage when it changes
   useEffect(() => {
     if (user?.role === Role.ADMIN && adminView) {
       localStorage.setItem('admin_last_view', adminView);
     }
   }, [adminView, user]);
+
+  // Prevent page reload when user is logged in
+  useEffect(() => {
+    if (!user) return;
+
+    let isHandlingUnload = false;
+
+    // Handler for beforeunload - show custom modal instead of browser dialog
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // If we're already showing the modal, don't interfere
+      if (isHandlingUnload) return;
+
+      isHandlingUnload = true;
+      e.preventDefault();
+      e.returnValue = ''; // Required for Chrome to show ANY dialog
+
+      // Show our custom modal
+      setShowReloadConfirm(true);
+
+      // Reset after a moment
+      setTimeout(() => {
+        isHandlingUnload = false;
+      }, 100);
+
+      return '';
+    };
+
+    // Handler for keyboard shortcuts - block with alert
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F5 key
+      if (e.key === 'F5') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        alert('🚫 Page refresh is disabled while logged in.\n\nPlease use the Logout button to exit.');
+        return false;
+      }
+      // Ctrl+R or Ctrl+Shift+R
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        alert('🚫 Page refresh is disabled while logged in.\n\nPlease use the Logout button to exit.');
+        return false;
+      }
+    };
+
+    // Add listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [user]);
 
   const refreshData = async (u: User = user!) => {
     if (!u) return;
@@ -309,20 +260,16 @@ function App() {
     }
   };
 
-  const handleLogin = async () => {
+  // handleLogin now receives user directly from Auth.tsx - no redundant fetch
+  const handleLogin = async (user: User) => {
     try {
-      const authUser = await db.auth.getCurrentUser();
-      
-      if (authUser && authUser.email) {
-        const fullUser = await db.users.getByEmail(authUser.email);
-        
-        if (fullUser) {
-          setUser(fullUser);
-          await refreshData(fullUser);
-        }
-      }
+      console.log('Login successful for:', user.full_name);
+      setUser(user);
+      await refreshData(user);
     } catch (error) {
       console.error('Login callback failed:', error);
+      // Re-throw so Auth.tsx can show error and re-enable button
+      throw error;
     }
   };
 
@@ -364,7 +311,7 @@ function App() {
 
   // Show login if no user
   if (!user) {
-    return <Auth onLogin={handleLogin} />;
+    return <Auth onLogin={handleLogin} isRestoringSession={isRestoringSession} />;
   }
 
   // --- ADMIN FLOW ---
@@ -503,6 +450,61 @@ function App() {
         onClose={() => setCreateModalOpen(false)}
         onSubmit={handleCreateProject}
       />
+
+      {/* Custom Reload Confirmation Modal */}
+      {showReloadConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform animate-bounce-in">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <span className="text-2xl">🔄</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">localhost:3000 says</h2>
+                  <p className="text-xs text-slate-500">Page refresh confirmation</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <span className="text-red-500 text-xl mt-1">🚫</span>
+                <div className="flex-1">
+                  <p className="text-slate-800 font-semibold mb-2">
+                    Changes that you made may not be saved. You will be redirected to the homepage.
+                  </p>
+                  <p className="text-slate-600 text-sm">
+                    Your session will be cleared and you'll need to login again.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowReloadConfirm(false)}
+                className="px-6 py-2.5 text-slate-700 font-semibold hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Instant redirect - don't wait for logout
+                  clearAllTokens();
+                  window.location.href = '/';
+                }}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm hover:shadow-md transition-all"
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

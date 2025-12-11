@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Lock, ArrowRight, Layers, Zap, CheckCircle, X, Mail, Key, AlertCircle, Loader, Eye, EyeOff } from 'lucide-react';
 import { db } from '../services/supabaseDb';
+import { User } from '../types';
 
 interface AuthProps {
-    onLogin: () => void;
+    onLogin: (user: User) => Promise<void>; // Updated to pass user
+    isRestoringSession: boolean; // New prop to disable login during session restore
 }
 
-const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+const Auth: React.FC<AuthProps> = ({ onLogin, isRestoringSession }) => {
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -23,17 +25,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         try {
             if (email && password) {
-                // Let the db.login handle the authentication without additional timeout
-                // The Supabase client now has its own timeout handling
-                await db.login(email, password);
-                onLogin();
+                // Login and get user object
+                const user = await db.login(email, password);
+
+                // Pass user to parent callback
+                await onLogin(user);
             }
         } catch (err: any) {
             console.error('Login failed:', err);
-            
+
             // Provide more specific error messages
             let errorMessage = err.message || 'Failed to login. Please check your credentials.';
-            
+
             if (errorMessage.includes('timeout')) {
                 errorMessage = 'Login request timed out. Please check your network connection and try again.';
             } else if (errorMessage.includes('Invalid login credentials')) {
@@ -41,9 +44,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             } else if (errorMessage.includes('Email not confirmed')) {
                 errorMessage = 'Email not confirmed. Please check your email for confirmation link.';
             }
-            
+
             setError(errorMessage);
         } finally {
+            // ALWAYS re-enable button, even if onLogin throws
             setIsLoading(false);
         }
     };
@@ -209,13 +213,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             {/* Login Button */}
                             <button
                                 type="submit"
-                                disabled={isLoading}
-                                className={`w-full bg-black hover:bg-slate-800 text-white p-4 border-2 border-black font-black uppercase flex items-center justify-center space-x-2 transition-all shadow-[6px_6px_0px_0px_rgba(100,100,100,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(100,100,100,1)] text-lg tracking-wide ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                disabled={isLoading || isRestoringSession}
+                                className={`w-full bg-black hover:bg-slate-800 text-white p-4 border-2 border-black font-black uppercase flex items-center justify-center space-x-2 transition-all shadow-[6px_6px_0px_0px_rgba(100,100,100,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(100,100,100,1)] text-lg tracking-wide ${isLoading || isRestoringSession ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
                                 {isLoading ? (
                                     <>
                                         <Loader className="w-5 h-5 animate-spin" />
                                         <span>Logging in...</span>
+                                    </>
+                                ) : isRestoringSession ? (
+                                    <>
+                                        <Loader className="w-5 h-5 animate-spin" />
+                                        <span>Initializing...</span>
                                     </>
                                 ) : (
                                     <>
