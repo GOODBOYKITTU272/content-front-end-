@@ -147,8 +147,12 @@ function App() {
 
       // IMPORTANT: Skip session restoration on password reset/set-password pages
       // These pages use recovery tokens, not regular sessions
-      if (location.pathname === '/set-password') {
-        console.log('On set-password page, skipping session restoration to preserve recovery token');
+      // Check both pathname and hash-based recovery URLs
+      const isRecoveryFlow = location.pathname === '/set-password' ||
+        (location.hash && location.hash.includes('type=recovery'));
+
+      if (isRecoveryFlow) {
+        console.log('On password reset page, skipping session restoration to preserve recovery token');
         if (mounted) {
           setLoading(false);
           setIsRestoringSession(false);
