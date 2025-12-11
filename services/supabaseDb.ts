@@ -353,14 +353,32 @@ export const users = {
 
     // Get user by email
     async getByEmail(email: string) {
+        console.log('🔍 getByEmail: Fetching user for:', email);
+
         const { data, error } = await supabase
             .from('users')
             .select('*')
-            .eq('email', email)
-            .single();
+            .eq('email', email);
 
-        if (error) throw error;
-        return data as User;
+        if (error) {
+            console.error('❌ getByEmail: Database error:', error);
+            throw error;
+        }
+
+        if (!data || data.length === 0) {
+            console.warn('⚠️  getByEmail: No user found for email:', email);
+            throw new Error(`No user found with email: ${email}`);
+        }
+
+        if (data.length > 1) {
+            console.error(`🔴 getByEmail: DUPLICATE USERS DETECTED for ${email}! Found ${data.length} users.`);
+            console.error('🔴 User IDs:', data.map(u => u.id));
+            console.warn('⚠️  getByEmail: Returning first match, but you should clean up duplicates!');
+            // Return first match to allow login, but log the issue
+        }
+
+        console.log('✅ getByEmail: User found:', data[0].full_name);
+        return data[0] as User;
     },
 
     // Create new user
