@@ -48,7 +48,6 @@ function App() {
   const [isRestoringSession, setIsRestoringSession] = useState(true); // NEW: Track session restoration
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
-  const [showReloadConfirm, setShowReloadConfirm] = useState(false); // Custom reload modal
 
   // Admin State
   const [adminView, setAdminView] = useState<AdminView>(() => {
@@ -198,64 +197,6 @@ function App() {
       localStorage.setItem('admin_last_view', adminView);
     }
   }, [adminView, user]);
-
-  // Prevent page reload when user is logged in
-  useEffect(() => {
-    if (!user) return;
-
-    let isHandlingUnload = false;
-
-    // Handler for beforeunload - show custom modal instead of browser dialog
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // If we're already showing the modal, don't interfere
-      if (isHandlingUnload) return;
-
-      isHandlingUnload = true;
-      e.preventDefault();
-      e.returnValue = ''; // Required for Chrome to show ANY dialog
-
-      // Show our custom modal
-      setShowReloadConfirm(true);
-
-      // Reset after a moment
-      setTimeout(() => {
-        isHandlingUnload = false;
-      }, 100);
-
-      return '';
-    };
-
-    // Handler for keyboard shortcuts - block with alert
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // F5 key
-      if (e.key === 'F5') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        alert('🚫 Page refresh is disabled while logged in.\n\nPlease use the Logout button to exit.');
-        return false;
-      }
-      // Ctrl+R or Ctrl+Shift+R
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R')) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        alert('🚫 Page refresh is disabled while logged in.\n\nPlease use the Logout button to exit.');
-        return false;
-      }
-    };
-
-    // Add listeners
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('keydown', handleKeyDown, true);
-    document.addEventListener('keydown', handleKeyDown, true);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('keydown', handleKeyDown, true);
-      document.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [user]);
 
   const refreshData = async (u: User = user!) => {
     if (!u) return;
@@ -467,60 +408,7 @@ function App() {
         onSubmit={handleCreateProject}
       />
 
-      {/* Custom Reload Confirmation Modal */}
-      {showReloadConfirm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform animate-bounce-in">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                  <span className="text-2xl">🔄</span>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">localhost:3000 says</h2>
-                  <p className="text-xs text-slate-500">Page refresh confirmation</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Content */}
-            <div className="px-6 py-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <span className="text-red-500 text-xl mt-1">🚫</span>
-                <div className="flex-1">
-                  <p className="text-slate-800 font-semibold mb-2">
-                    Changes that you made may not be saved. You will be redirected to the homepage.
-                  </p>
-                  <p className="text-slate-600 text-sm">
-                    Your session will be cleared and you'll need to login again.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3 border-t border-slate-200">
-              <button
-                onClick={() => setShowReloadConfirm(false)}
-                className="px-6 py-2.5 text-slate-700 font-semibold hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  // Instant redirect - don't wait for logout
-                  clearAllTokens();
-                  window.location.href = '/';
-                }}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm hover:shadow-md transition-all"
-              >
-                Reload
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
