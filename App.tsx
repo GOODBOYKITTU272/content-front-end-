@@ -280,8 +280,12 @@ function App() {
     );
   }
 
-  // Handle Set Password Route
-  if (location.pathname === '/set-password') {
+  // Handle Set Password Route (both path and hash-based)
+  // Supabase password reset links use hash fragments like /#access_token=...&type=recovery
+  const isPasswordResetFlow = location.pathname === '/set-password' ||
+    (location.hash && location.hash.includes('type=recovery'));
+
+  if (isPassword ResetFlow) {
     return <SetPassword />;
   }
 
