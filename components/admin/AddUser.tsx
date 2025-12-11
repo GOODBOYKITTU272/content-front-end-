@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Role, UserStatus } from '../../types';
 import { db } from '../../services/supabaseDb';
 import { ArrowLeft, Save, User as UserIcon, Mail, Shield, Smartphone, Bell, Lock } from 'lucide-react';
@@ -19,16 +19,24 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
         ssoAllowed: false
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false); // Immediate lock to prevent double-click
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Use ref for immediate check (faster than state)
+        if (isSubmittingRef.current) {
+            console.log('Already submitting (ref lock), ignoring duplicate');
+            return;
+        }
+
         if (isSubmitting) {
-            console.log('Already submitting, ignoring duplicate');
+            console.log('Already submitting (state check), ignoring duplicate');
             return;
         }
 
         console.log('Form submitted with data:', formData);
+        isSubmittingRef.current = true; // Lock immediately
         setIsSubmitting(true);
 
         try {
@@ -97,6 +105,7 @@ const AddUser: React.FC<Props> = ({ onBack, onUserAdded }) => {
                 alert(`Error creating user: ${errorMessage}`);
             }
         } finally {
+            isSubmittingRef.current = false; // Unlock
             setIsSubmitting(false);
         }
     };
