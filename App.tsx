@@ -145,6 +145,17 @@ function App() {
     const initializeAuth = async () => {
       if (!mounted) return;
 
+      // IMPORTANT: Skip session restoration on password reset/set-password pages
+      // These pages use recovery tokens, not regular sessions
+      if (location.pathname === '/set-password') {
+        console.log('On set-password page, skipping session restoration to preserve recovery token');
+        if (mounted) {
+          setLoading(false);
+          setIsRestoringSession(false);
+        }
+        return;
+      }
+
       // Check if there are any stored tokens FIRST
       const hasStoredTokens = Object.keys(localStorage).some(key =>
         key.startsWith('sb-') && key.includes('-auth-token')
