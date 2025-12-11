@@ -54,8 +54,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onOpenCreate,
             <button
               onClick={() => onChangeView?.('dashboard')}
               className={`w-full flex items-center space-x-3 px-4 py-4 border-2 border-black font-black uppercase transition-transform hover:-translate-y-1 hover:-translate-x-1 ${activeView === 'dashboard'
-                  ? 'bg-[#D946EF] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-slate-50'
+                ? 'bg-[#D946EF] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-white text-black hover:bg-slate-50'
                 }`}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -67,8 +67,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onOpenCreate,
               <button
                 onClick={() => onChangeView?.('mywork')}
                 className={`w-full flex items-center space-x-3 px-4 py-4 border-2 font-bold uppercase transition-all ${activeView === 'mywork'
-                    ? 'bg-[#D946EF] text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                    : 'bg-white text-black border-transparent hover:border-black hover:bg-slate-50'
+                  ? 'bg-[#D946EF] text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                  : 'bg-white text-black border-transparent hover:border-black hover:bg-slate-50'
                   }`}
               >
                 <PenTool className="w-5 h-5" />
@@ -81,8 +81,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onOpenCreate,
               <button
                 onClick={() => onChangeView?.('calendar')}
                 className={`w-full flex items-center space-x-3 px-4 py-4 border-2 font-bold uppercase transition-all ${activeView === 'calendar'
-                    ? 'bg-[#D946EF] text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                    : 'bg-white text-black border-transparent hover:border-black hover:bg-slate-50'
+                  ? 'bg-[#D946EF] text-black border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                  : 'bg-white text-black border-transparent hover:border-black hover:bg-slate-50'
                   }`}
               >
                 <Calendar className="w-5 h-5" />
@@ -106,8 +106,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onOpenCreate,
             onClick={onLogout}
             className="w-full flex items-center justify-center space-x-2 p-3 bg-[#FF4F4F] text-white border-2 border-black font-bold uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-[4px] active:translate-x-[4px] transition-all"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
+            <LogOut className="w-5 h-5" />
+            <span>Logout</span>
           </button>
         </div>
       </aside>
