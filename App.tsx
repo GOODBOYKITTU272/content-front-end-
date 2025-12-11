@@ -136,6 +136,21 @@ function App() {
     const initializeAuth = async () => {
       if (!mounted) return;
 
+      // Check if there are any stored tokens FIRST
+      const hasStoredTokens = Object.keys(localStorage).some(key =>
+        key.startsWith('sb-') && key.includes('-auth-token')
+      );
+
+      // If no tokens, skip loading and go straight to login
+      if (!hasStoredTokens) {
+        console.log('No stored tokens found, skipping session restoration');
+        if (mounted) {
+          setLoading(false);
+          setIsRestoringSession(false);
+        }
+        return;
+      }
+
       try {
         console.log('Starting session initialization...');
         await restoreSession();
