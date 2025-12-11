@@ -92,46 +92,94 @@ function App() {
   // Simplified session restoration with proper error handling
   const restoreSession = async () => {
     try {
-      console.log('Attempting session restoration...');
+      console.log('🔄 Session Restore: Starting...');
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // STEP 1: Check if tokens exist
+      const tokens = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
 
+      if (tokens.length === 0) {
+        console.log('✅ Session Restore: No tokens found, clean state');
+        return; // Clean state, no session to restore
+      }
+
+      console.log(`🔍 Session Restore: Found ${tokens.length} tokens, validating...`);
+
+      // STEP 2: Attempt session restoration with timeout protection
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session check timeout')), 5000)
+      );
+
+      const { data: { session }, error: sessionError } = await Promise.race([
+        sessionPromise,
+        timeoutPromise
+      ]) as any;
+
+      // STEP 3: Handle timeout or session errors
       if (sessionError) {
-        console.warn('Session check error:', sessionError);
+        if (sessionError.message?.includes('timeout')) {
+          console.error('❌ Session Restore: Timeout after 5 seconds, clearing stale tokens');
+          clearAllTokens();
+          return;
+        }
+
+        console.warn('⚠️  Session Restore: Session check error:', sessionError);
         // Only clear if it's an auth error (invalid token), not network/other errors
         if (sessionError.message?.includes('invalid') || sessionError.message?.includes('expired')) {
-          console.log('Token is invalid/expired, clearing...');
+          console.log('🧹 Session Restore: Token is invalid/expired, clearing...');
           clearAllTokens();
         }
         return;
       }
 
+      // STEP 4: Validate session exists and hasn't expired
+      if (!session) {
+        console.log('⚠️  Session Restore: No active session despite tokens existing, clearing...');
+        clearAllTokens();
+        return;
+      }
+
+      // STEP 5: Check if session is actually usable (not expired)
+      if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+        console.warn('⚠️  Session Restore: Session expired, clearing tokens');
+        clearAllTokens();
+        return;
+      }
+
+      // STEP 6: Session valid, fetch user data
       if (session?.user) {
+        console.log('✅ Session Restore: Valid session found, fetching user data...');
         try {
           const fullUser = await db.users.getByEmail(session.user.email!);
           if (fullUser) {
-            console.log('Session restored for:', fullUser.full_name);
+            console.log('✅ Session Restore: Session restored for:', fullUser.full_name);
             setUser(fullUser);
             await refreshData(fullUser);
           } else {
-            console.warn('User not found in database for email:', session.user.email);
+            console.warn('⚠️  Session Restore: User not found in database for email:', session.user.email);
             // User exists in auth but not in database - this is a real problem, clear session
             await supabase.auth.signOut();
             clearAllTokens();
           }
         } catch (dbError) {
-          console.error('Error fetching user from database:', dbError);
+          console.error('❌ Session Restore: Error fetching user from database:', dbError);
           // DON'T clear tokens on database errors - might be temporary network issue
           // Just log the error and show login screen
         }
-      } else {
-        console.log('No active session found');
       }
     } catch (error: any) {
-      console.error('Session restoration failed:', error);
+      console.error('❌ Session Restore: Fatal error:', error);
+
+      // Handle timeout specifically
+      if (error.message?.includes('timeout')) {
+        console.error('🧹 Session Restore: Timeout detected, clearing tokens');
+        clearAllTokens();
+        return;
+      }
+
       // DON'T clear tokens on all errors - only on auth-specific errors
       if (error.message?.includes('invalid') || error.message?.includes('expired') || error.message?.includes('token')) {
-        console.log('Auth error detected, clearing tokens');
+        console.log('🧹 Session Restore: Auth error detected, clearing tokens');
         clearAllTokens();
       }
     }
@@ -301,21 +349,43 @@ function App() {
   };
 
   const handleLogout = async () => {
-    // Clear UI immediately for instant response
-    setUser(null);
-    setProjects([]);
-    setAdminUsers([]);
-    setAdminLogs([]);
-    setAdminView('DASH');
-    localStorage.removeItem('admin_last_view');
+    console.log('🚪 Logout: Starting logout process...');
 
-    // Clear all Supabase tokens immediately
-    clearAllTokens();
+    try {
+      // Clear UI immediately for instant response
+      setUser(null);
+      setProjects([]);
+      setAdminUsers([]);
+      setAdminLogs([]);
+      setAdminView('DASH');
+      localStorage.removeItem('admin_last_view');
+      console.log('✅ Logout: UI state cleared');
 
-    // Do cleanup in background (don't await)
-    db.logout().catch(error => {
-      console.error('Logout cleanup failed:', error);
-    });
+      // Ensure Supabase signout completes
+      console.log('🔐 Logout: Signing out from Supabase...');
+      await db.logout();
+      console.log('✅ Logout: Supabase logout complete');
+
+      // Force clear all auth tokens as failsafe
+      console.log('🧹 Logout: Force clearing all tokens...');
+      clearAllTokens();
+
+      // Verify tokens are gone
+      const remaining = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
+      if (remaining.length > 0) {
+        console.warn(`⚠️  Logout: ${remaining.length} tokens still present, force removing:`, remaining);
+        remaining.forEach(key => localStorage.removeItem(key));
+      } else {
+        console.log('✅ Logout: All tokens cleared successfully');
+      }
+    } catch (error) {
+      console.error('❌ Logout: Error during logout:', error);
+      // Even on error, force clear tokens
+      console.log('🧹 Logout: Force clearing tokens due to error...');
+      clearAllTokens();
+    }
+
+    console.log('✅ Logout: Complete');
   };
 
   const handleCreateProject = async (title: string, channel: Channel, dueDate: string) => {

@@ -18,12 +18,48 @@ import {
 export const auth = {
     // Sign in with email/password
     async signIn(email: string, password: string) {
+        console.log('🔐 SignIn: Starting login process...');
+
+        // LAYER 1: Force clear ALL Supabase tokens from localStorage
+        // This prevents stale/expired tokens from interfering
+        console.log('🧹 SignIn: Clearing all sb-* tokens from localStorage...');
+        const clearedKeys: string[] = [];
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-')) {
+                localStorage.removeItem(key);
+                clearedKeys.push(key);
+            }
+        });
+        if (clearedKeys.length > 0) {
+            console.log(`🧹 SignIn: Cleared ${clearedKeys.length} old tokens:`, clearedKeys);
+        }
+
+        // LAYER 2: Explicitly sign out to ensure backend session cleared
+        console.log('🚪 SignIn: Calling signOut to clear backend session...');
+        try {
+            await supabase.auth.signOut({ scope: 'global' });
+            console.log('✅ SignIn: Backend session cleared');
+        } catch (signOutError) {
+            console.warn('⚠️  SignIn: SignOut failed (continuing anyway):', signOutError);
+            // Don't throw - old session might not exist
+        }
+
+        // LAYER 3: Small delay to ensure cleanup completes
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Now proceed with fresh login
+        console.log('🔑 SignIn: Attempting fresh login...');
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password
         });
 
-        if (error) throw error;
+        if (error) {
+            console.error('❌ SignIn: Login failed:', error);
+            throw error;
+        }
+
+        console.log('✅ SignIn: Login successful');
 
         // Update last login
         if (data.user) {
@@ -1011,6 +1047,14 @@ export const db = {
 
     async login(email: string, password: string): Promise<User> {
         try {
+            // Defensive: clear any stale local session before a fresh login attempt
+            // This prevents "stuck until I delete tokens" issues when refresh tokens are invalid
+            try {
+                await supabase.auth.signOut();
+            } catch (signOutErr) {
+                console.warn('Pre-login signOut failed (safe to ignore if no session):', signOutErr);
+            }
+
             // Real authentication using Supabase
             console.log('Login: calling signInWithPassword...');
             const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
