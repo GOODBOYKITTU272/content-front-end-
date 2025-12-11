@@ -176,12 +176,23 @@ const EditUserModal: React.FC<{ user: User; logs: SystemLog[]; onClose: () => vo
 
     const handleSave = async () => {
         try {
+            console.log('=== SAVE USER START ===');
+            console.log('User ID:', user.id);
+            console.log('Form Data:', formData);
+            console.log('Old Role:', user.role, 'New Role:', formData.role);
+
             await db.updateUser(user.id, formData);
+            console.log('Database update successful');
+
             alert('User updated successfully!');
+            console.log('Calling onRefresh...');
             onRefresh();
+            console.log('Refresh called, closing modal...');
             onClose();
         } catch (error: any) {
-            console.error('Failed to update user:', error);
+            console.error('=== SAVE USER ERROR ===');
+            console.error('Error object:', error);
+            console.error('Error message:', error.message);
             alert(`Failed to update user: ${error.message || 'Unknown error'}`);
         }
     };
