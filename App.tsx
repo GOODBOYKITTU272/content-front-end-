@@ -285,7 +285,7 @@ function App() {
   const isPasswordResetFlow = location.pathname === '/set-password' ||
     (location.hash && location.hash.includes('type=recovery'));
 
-  if (isPassword ResetFlow) {
+  if (isPasswordResetFlow) {
     return <SetPassword />;
   }
 
