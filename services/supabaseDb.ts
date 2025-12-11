@@ -84,7 +84,7 @@ export const auth = {
                     phone: userData.phone,
                     status: UserStatus.ACTIVE
                 });
-                
+
                 // Since we couldn't send an invite email, we'll create a basic user record
                 console.log('User created directly without invite email:', newUser);
                 return newUser;
@@ -154,7 +154,7 @@ export const auth = {
                     phone: userData.phone,
                     status: UserStatus.ACTIVE
                 });
-                
+
                 console.log('User created directly without invite email:', newUser);
                 return newUser;
             }
@@ -204,11 +204,63 @@ export const auth = {
 
             const data = await response.json();
             console.log('Edge Function success:', data);
-            
+
             // Return the full response data, not just the user
             return data;
         } catch (error: any) {
             console.error('inviteUser error:', error);
+            throw error;
+        }
+    },
+
+    // Delete user (Admin only) - Calls secure Edge Function
+    async deleteUser(userId: string) {
+        console.log('deleteUser called for:', userId);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://zxnevoulicmapqmniaos.supabase.co';
+
+        try {
+            // Get current session
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session) {
+                throw new Error('No active session - admin authentication required');
+            }
+
+            console.log('Calling delete-user Edge Function...');
+
+            // Call Edge Function
+            const response = await fetch(`${supabaseUrl}/functions/v1/delete-user`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userId })
+            });
+
+            console.log('Edge Function response status:', response.status);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Edge Function error response:', errorText);
+
+                let errorMessage;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || 'Failed to delete user';
+                } catch {
+                    errorMessage = errorText || 'Failed to delete user';
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            console.log('User deleted successfully:', data);
+
+            return data;
+        } catch (error: any) {
+            console.error('deleteUser error:', error);
             throw error;
         }
     }
@@ -832,7 +884,7 @@ let currentUserCache: User | null = null;
 // Listen for auth changes with improved handling
 supabase.auth.onAuthStateChange(async (event, session) => {
     console.log('DB Auth state change detected:', event);
-    
+
     switch (event) {
         case 'SIGNED_IN':
             if (session?.user) {
@@ -842,12 +894,12 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                         .select('*')
                         .eq('email', session.user.email)
                         .single();
-                        
+
                     if (error) {
                         console.warn('Error fetching user data on sign in:', error);
                         return;
                     }
-                    
+
                     if (data) {
                         currentUserCache = data as User;
                         console.log('DB: User signed in and cached:', currentUserCache?.full_name);
@@ -857,22 +909,22 @@ supabase.auth.onAuthStateChange(async (event, session) => {
                 }
             }
             break;
-            
+
         case 'SIGNED_OUT':
             console.log('DB: User signed out, clearing cache');
             currentUserCache = null;
             break;
-            
+
         case 'TOKEN_REFRESHED':
             console.log('DB: Token refreshed');
             // Optionally re-fetch user data if needed
             break;
-            
+
         case 'USER_UPDATED':
             console.log('DB: User updated');
             // Optionally re-fetch user data if needed
             break;
-            
+
         default:
             console.log('DB: Other auth event:', event);
     }
@@ -906,19 +958,19 @@ export const db = {
         try {
             console.log('DB: Manually refreshing session...');
             const { data: { session } } = await supabase.auth.getSession();
-            
+
             if (session?.user) {
                 const { data, error } = await supabase
                     .from('users')
                     .select('*')
                     .eq('email', session.user.email!)
                     .single();
-                    
+
                 if (error) {
                     console.warn('DB: Error fetching user during session refresh:', error);
                     return false;
                 }
-                
+
                 if (data) {
                     currentUserCache = data as User;
                     console.log('DB: Session refreshed successfully for:', currentUserCache.full_name);
@@ -928,7 +980,7 @@ export const db = {
                 console.log('DB: No active session to refresh');
                 currentUserCache = null;
             }
-            
+
             return false;
         } catch (error) {
             console.error('DB: Session refresh failed:', error);
@@ -968,7 +1020,7 @@ export const db = {
 
             currentUserCache = userData.data as User;
             console.log('User logged in and cached:', currentUserCache.full_name);
-            
+
             // Update last login
             try {
                 await supabase
@@ -978,7 +1030,7 @@ export const db = {
             } catch (updateError) {
                 console.warn('Failed to update last login timestamp:', updateError);
             }
-            
+
             return userData.data as User;
         } catch (error) {
             console.error('Login error:', error);

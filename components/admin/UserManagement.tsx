@@ -127,7 +127,7 @@ const UserManagement: React.FC<Props> = ({ users, logs, onRefresh, onNavigate })
                                                 onClick={async () => {
                                                     if (window.confirm(`Are you sure you want to delete ${user.full_name}? This action cannot be undone.`)) {
                                                         try {
-                                                            await db.deleteUser(user.id);
+                                                            await db.auth.deleteUser(user.id);
                                                             alert('User deleted successfully');
                                                             onRefresh();
                                                         } catch (error: any) {
