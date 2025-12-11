@@ -174,10 +174,16 @@ const EditUserModal: React.FC<{ user: User; logs: SystemLog[]; onClose: () => vo
     const [activeTab, setActiveTab] = useState<'PROFILE' | 'ROLE' | 'ACCOUNT' | 'LOGS'>('PROFILE');
     const [formData, setFormData] = useState({ ...user });
 
-    const handleSave = () => {
-        db.updateUser(user.id, formData);
-        onRefresh();
-        onClose();
+    const handleSave = async () => {
+        try {
+            await db.updateUser(user.id, formData);
+            alert('User updated successfully!');
+            onRefresh();
+            onClose();
+        } catch (error: any) {
+            console.error('Failed to update user:', error);
+            alert(`Failed to update user: ${error.message || 'Unknown error'}`);
+        }
     };
 
     const userLogs = logs.filter(l => l.details.includes(user.full_name) || l.details.includes(user.id) || l.actor_id === user.id).slice(0, 10);
