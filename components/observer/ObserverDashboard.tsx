@@ -12,6 +12,7 @@ const ObserverDashboard: React.FC<ObserverDashboardProps> = ({ user, onLogout })
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentView, setCurrentView] = useState<'overview' | 'projects' | 'approvals' | 'calendar'>('overview');
+    const [projectFilter, setProjectFilter] = useState<'all' | 'pending' | 'approved' | 'inProduction' | 'posted'>('all');
 
     useEffect(() => {
         loadData();
@@ -148,37 +149,61 @@ const ObserverDashboard: React.FC<ObserverDashboardProps> = ({ user, onLogout })
                     <div>
                         <h3 className="text-xl font-black uppercase mb-6">📈 Quick Insights</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                            <div className="bg-amber-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                            <button
+                                onClick={() => {
+                                    setProjectFilter('pending');
+                                    setCurrentView('projects');
+                                }}
+                                className="bg-amber-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer text-left w-full"
+                            >
                                 <div className="flex items-center justify-between mb-2">
                                     <Clock className="w-8 h-8 text-black" />
                                     <span className="text-4xl font-black text-black">{stats.pending}</span>
                                 </div>
                                 <p className="text-black font-bold uppercase text-sm">Pending Review</p>
-                            </div>
+                            </button>
 
-                            <div className="bg-green-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                            <button
+                                onClick={() => {
+                                    setProjectFilter('approved');
+                                    setCurrentView('projects');
+                                }}
+                                className="bg-green-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer text-left w-full"
+                            >
                                 <div className="flex items-center justify-between mb-2">
                                     <CheckCircle className="w-8 h-8 text-black" />
                                     <span className="text-4xl font-black text-black">{stats.approved}</span>
                                 </div>
                                 <p className="text-black font-bold uppercase text-sm">Approved Today</p>
-                            </div>
+                            </button>
 
-                            <div className="bg-blue-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                            <button
+                                onClick={() => {
+                                    setProjectFilter('inProduction');
+                                    setCurrentView('projects');
+                                }}
+                                className="bg-blue-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer text-left w-full"
+                            >
                                 <div className="flex items-center justify-between mb-2">
                                     <TrendingUp className="w-8 h-8 text-black" />
                                     <span className="text-4xl font-black text-black">{stats.inProduction}</span>
                                 </div>
                                 <p className="text-black font-bold uppercase text-sm">In Production</p>
-                            </div>
+                            </button>
 
-                            <div className="bg-purple-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                            <button
+                                onClick={() => {
+                                    setProjectFilter('posted');
+                                    setCurrentView('projects');
+                                }}
+                                className="bg-purple-400 border-2 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer text-left w-full"
+                            >
                                 <div className="flex items-center justify-between mb-2">
                                     <BarChart3 className="w-8 h-8 text-black" />
                                     <span className="text-4xl font-black text-black">{stats.posted}</span>
                                 </div>
                                 <p className="text-black font-bold uppercase text-sm">Posted This Week</p>
-                            </div>
+                            </button>
                         </div>
 
                         {/* Recent Activity */}
@@ -208,51 +233,75 @@ const ObserverDashboard: React.FC<ObserverDashboardProps> = ({ user, onLogout })
                 )}
 
                 {/* All Projects View */}
-                {currentView === 'projects' && (
-                    <div>
-                        <h3 className="text-xl font-black uppercase mb-6">🗂️ All Projects ({projects.length})</h3>
-                        <div className="bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-slate-100 border-b-2 border-black">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left font-bold uppercase text-sm">Title</th>
-                                            <th className="px-4 py-3 text-left font-bold uppercase text-sm">Channel</th>
-                                            <th className="px-4 py-3 text-left font-bold uppercase text-sm">Stage</th>
-                                            <th className="px-4 py-3 text-left font-bold uppercase text-sm">Status</th>
-                                            <th className="px-4 py-3 text-left font-bold uppercase text-sm">Due Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {projects.map((project, idx) => (
-                                            <tr key={project.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                                <td className="px-4 py-3 font-medium">{project.title}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className="px-2 py-1 text-xs font-bold bg-purple-100 text-purple-800 rounded">
-                                                        {project.channel}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">{project.current_stage}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 text-xs font-bold rounded ${project.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                {currentView === 'projects' && (() => {
+                    const filteredProjects = projectFilter === 'all' ? projects :
+                        projectFilter === 'pending' ? projects.filter(p => p.status === 'WAITING_APPROVAL') :
+                            projectFilter === 'approved' ? projects.filter(p => p.status === 'DONE' && p.created_at.includes(new Date().toISOString().split('T')[0].slice(0, 7))) :
+                                projectFilter === 'inProduction' ? projects.filter(p => p.status === 'IN_PROGRESS') :
+                                    projects.filter(p => p.current_stage === 'POSTED');
+
+                    const filterTitle = projectFilter === 'all' ? 'All Projects' :
+                        projectFilter === 'pending' ? 'Pending Review' :
+                            projectFilter === 'approved' ? 'Approved Today' :
+                                projectFilter === 'inProduction' ? 'In Production' :
+                                    'Posted This Week';
+
+                    return (
+                        <div>
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-black uppercase">🗂️ {filterTitle} ({filteredProjects.length})</h3>
+                                {projectFilter !== 'all' && (
+                                    <button
+                                        onClick={() => setProjectFilter('all')}
+                                        className="px-4 py-2 bg-slate-900 text-white border-2 border-black font-bold uppercase text-sm hover:bg-slate-700 transition-colors"
+                                    >
+                                        Show All
+                                    </button>
+                                )}
+                            </div>
+                            <div className="bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-slate-100 border-b-2 border-black">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-bold uppercase text-sm">Title</th>
+                                                <th className="px-4 py-3 text-left font-bold uppercase text-sm">Channel</th>
+                                                <th className="px-4 py-3 text-left font-bold uppercase text-sm">Stage</th>
+                                                <th className="px-4 py-3 text-left font-bold uppercase text-sm">Status</th>
+                                                <th className="px-4 py-3 text-left font-bold uppercase text-sm">Due Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredProjects.map((project, idx) => (
+                                                <tr key={project.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                                    <td className="px-4 py-3 font-medium">{project.title}</td>
+                                                    <td className="px-4 py-3">
+                                                        <span className="px-2 py-1 text-xs font-bold bg-purple-100 text-purple-800 rounded">
+                                                            {project.channel}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm">{project.current_stage}</td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`px-2 py-1 text-xs font-bold rounded ${project.status === 'DONE' ? 'bg-green-100 text-green-800' :
                                                             project.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
                                                                 project.status === 'WAITING_APPROVAL' ? 'bg-amber-100 text-amber-800' :
                                                                     'bg-slate-100 text-slate-800'
-                                                        }`}>
-                                                        {project.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm">
-                                                    {new Date(project.due_date).toLocaleDateString()}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                                            }`}>
+                                                            {project.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm">
+                                                        {new Date(project.due_date).toLocaleDateString()}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Approvals View */}
                 {currentView === 'approvals' && (
@@ -270,7 +319,7 @@ const ObserverDashboard: React.FC<ObserverDashboardProps> = ({ user, onLogout })
                                         </div>
                                         <div className="text-right">
                                             <span className={`px-3 py-1 text-sm font-bold rounded ${project.status === 'DONE' ? 'bg-green-400 text-black' :
-                                                    'bg-amber-400 text-black'
+                                                'bg-amber-400 text-black'
                                                 }`}>
                                                 {project.status === 'DONE' ? '✓ Approved' : '⏳ Pending'}
                                             </span>
@@ -326,8 +375,8 @@ const ObserverDashboard: React.FC<ObserverDashboardProps> = ({ user, onLogout })
                                             <div
                                                 key={p.id}
                                                 className={`text-xs p-1 mb-1 rounded truncate ${p.channel === 'INSTAGRAM' ? 'bg-pink-200 text-pink-800' :
-                                                        p.channel === 'YOUTUBE' ? 'bg-red-200 text-red-800' :
-                                                            'bg-blue-200 text-blue-800'
+                                                    p.channel === 'YOUTUBE' ? 'bg-red-200 text-red-800' :
+                                                        'bg-blue-200 text-blue-800'
                                                     }`}
                                                 title={p.title}
                                             >
